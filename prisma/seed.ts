@@ -6,7 +6,13 @@ const prisma = new PrismaClient();
 async function main() {
   const company = await prisma.company.upsert({
     where: { id: "seed-company-1" },
-    update: {},
+    update: {
+      name: "Serralheria Demo",
+      document: "00.000.000/0001-00",
+      email: "contato@serralheria.demo",
+      phone: "(11) 99999-9999",
+      isActive: true,
+    },
     create: {
       id: "seed-company-1",
       name: "Serralheria Demo",
@@ -15,64 +21,61 @@ async function main() {
       phone: "(11) 99999-9999",
       isActive: true,
     },
-  });
+  } as any);
 
-  
-  // Seed: unidades padrão
+  // ==== UNIDADES PADRAO ====
   const units = [
     { code: "un", name: "Unidade" },
     { code: "m", name: "Metro" },
-    { code: "m2", name: "Metro quadrado" },
     { code: "kg", name: "Quilograma" },
     { code: "l", name: "Litro" },
     { code: "barra", name: "Barra" },
   ];
 
   for (const u of units) {
-    const exists = await prisma.unitOfMeasure.findFirst({
+    const existing = await prisma.unitOfMeasure.findFirst({
       where: { companyId: company.id, code: u.code },
       select: { id: true },
-    });
+    } as any);
 
-    if (!exists) {
+    if (!existing) {
       await prisma.unitOfMeasure.create({
-        data: { companyId: company.id, code: u.code, name: u.name, isActive: true },
-      });
+        data: { companyId: company.id, code: u.code, name: u.name, isActive: true } as any,
+      } as any);
     }
   }
-const passwordHash = await bcrypt.hash("admin123", 10);
 
-  const existing = await prisma.user.findFirst({
+  const passwordHash = await bcrypt.hash("admin123", 10);
+
+  // Seu schema pode ou não ter email como unique — então fazemos findFirst + upsert por id fixo
+  const existingAdmin = await prisma.user.findFirst({
     where: { email: "admin@demo.com" },
     select: { id: true },
-  });
+  } as any);
 
-  if (existing?.id) {
+  if (existingAdmin) {
     await prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        name: "Admin Demo",
-        role: "ADMIN",
-        companyId: company.id,
-        isActive: true,
-        passwordHash,
-      },
-    });
+      where: { id: existingAdmin.id } as any,
+      data: { name: "Admin Demo", role: "ADMIN" as any, companyId: company.id, isActive: true, passwordHash } as any,
+    } as any);
   } else {
     await prisma.user.create({
       data: {
-        id: "seed-user-admin-1",
         email: "admin@demo.com",
         name: "Admin Demo",
-        role: "ADMIN",
+        role: "ADMIN" as any,
         companyId: company.id,
         isActive: true,
         passwordHash,
-      },
-    });
+      } as any,
+    } as any);
   }
 
-  console.log("Seed OK:", { admin: "admin@demo.com / admin123", company: company.name });
+  console.log("Seed OK:", {
+    admin: "admin@demo.com / admin123",
+    company: company.name,
+    units: units.map((u) => u.code).join(", "),
+  });
 }
 
 main()
@@ -83,4 +86,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
