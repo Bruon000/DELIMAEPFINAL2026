@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -103,7 +104,13 @@ export default function ProdutosPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Produtos</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Produtos</h1>
+        <Button asChild variant="outline">
+          <Link href="/cadastros">Voltar</Link>
+        </Button>
+      </div>
+
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
 
       <Card>
@@ -132,7 +139,7 @@ export default function ProdutosPage() {
               />
             </Field>
 
-            <Field label="Preço de venda (R$)" hint="Use ponto para centavos. Ex.: 1999.90">
+            <Field label="Preço de venda (R$)" hint="Ex.: 1999.90">
               <Input
                 type="number"
                 step="0.01"
@@ -145,7 +152,7 @@ export default function ProdutosPage() {
               />
             </Field>
 
-            <Field label="Custo (R$)" hint="Custo estimado do produto. Ex.: 1200.00">
+            <Field label="Custo (R$)" hint="Ex.: 1200.00">
               <Input
                 type="number"
                 step="0.01"

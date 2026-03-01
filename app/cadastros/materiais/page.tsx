@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,16 @@ async function deleteMaterial(id: string) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "Erro ao remover");
   return data;
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-sm font-medium">{label}</div>
+      {children}
+      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+    </div>
+  );
 }
 
 export default function MateriaisPage() {
@@ -92,40 +103,84 @@ export default function MateriaisPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Materiais</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Materiais</h1>
+        <Button asChild variant="outline">
+          <Link href="/cadastros">Voltar</Link>
+        </Button>
+      </div>
+
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
 
       <Card>
         <CardHeader><CardTitle>{editing ? "Editar material" : "Novo material"}</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input placeholder="Nome" value={current.name ?? ""} onChange={(e) => {
-              const v = e.target.value;
-              editing ? setEditing({ ...editing, name: v }) : setForm({ ...form, name: v });
-            }} />
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Nome *" hint="Ex.: Tubo 30x30, Chapa 2mm, Trava, Parafuso...">
+              <Input
+                placeholder="Nome do material"
+                value={current.name ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  editing ? setEditing({ ...editing, name: v }) : setForm({ ...form, name: v });
+                }}
+              />
+            </Field>
 
-            <select className="border rounded p-2" value={current.unitId ?? ""} onChange={(e) => {
-              const v = e.target.value;
-              editing ? setEditing({ ...editing, unitId: v }) : setForm({ ...form, unitId: v });
-            }}>
-              <option value="">Unidade…</option>
-              {units.map((u: any) => <option key={u.id} value={u.id}>{u.code} - {u.name}</option>)}
-            </select>
+            <Field label="Unidade *" hint="Ex.: m, kg, un, barra">
+              <select
+                className="border rounded p-2 w-full"
+                value={current.unitId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  editing ? setEditing({ ...editing, unitId: v }) : setForm({ ...form, unitId: v });
+                }}
+              >
+                <option value="">Selecione…</option>
+                {units.map((u: any) => (
+                  <option key={u.id} value={u.id}>
+                    {u.code} - {u.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-            <Input placeholder="Código" value={current.code ?? ""} onChange={(e) => {
-              const v = e.target.value;
-              editing ? setEditing({ ...editing, code: v }) : setForm({ ...form, code: v });
-            }} />
+            <Field label="Código" hint="Código interno (opcional). Ex.: MAT-001">
+              <Input
+                placeholder="Código (opcional)"
+                value={current.code ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  editing ? setEditing({ ...editing, code: v }) : setForm({ ...form, code: v });
+                }}
+              />
+            </Field>
 
-            <Input placeholder="Custo atual" type="number" value={Number(current.currentCost ?? 0)} onChange={(e) => {
-              const v = Number(e.target.value);
-              editing ? setEditing({ ...editing, currentCost: v }) : setForm({ ...form, currentCost: v });
-            }} />
+            <Field label="Custo atual (R$)" hint="Usado em relatórios/custo. Ex.: 12.50">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={Number(current.currentCost ?? 0)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  editing ? setEditing({ ...editing, currentCost: v }) : setForm({ ...form, currentCost: v });
+                }}
+              />
+            </Field>
 
-            <Input placeholder="Estoque mínimo (opcional)" value={current.minStock ?? ""} onChange={(e) => {
-              const v = e.target.value;
-              editing ? setEditing({ ...editing, minStock: v }) : setForm({ ...form, minStock: v });
-            }} />
+            <Field label="Estoque mínimo" hint="Quando o saldo ficar abaixo disso, entra em alerta (opcional). Ex.: 5.0000">
+              <Input
+                type="number"
+                step="0.0001"
+                placeholder="(opcional)"
+                value={current.minStock ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  editing ? setEditing({ ...editing, minStock: v }) : setForm({ ...form, minStock: v });
+                }}
+              />
+            </Field>
           </div>
 
           <div className="flex gap-2">

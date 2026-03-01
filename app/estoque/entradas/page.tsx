@@ -63,7 +63,7 @@ export default function EntradasPage() {
           </select>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <Input type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+            <Input type="number" step="0.0001" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
             <Input placeholder="Referência (opcional: NF, compra, etc)" value={reference} onChange={(e) => setReference(e.target.value)} />
           </div>
 
@@ -77,3 +77,4 @@ export default function EntradasPage() {
     </div>
   );
 }
+
