@@ -39,10 +39,17 @@ Assim, na próxima sessão (ou em outra máquina/IA), o contexto continua no Git
 
 ---
 
-## Atualizar direto pelo GitHub
+## Quem pode marcar o checklist
 
-- No GitHub: aba **Code** → clique no arquivo (ex: `CHECKLIST.md`) → ícone do **lápis** (Edit) → edite → **Commit changes**.
-- Isso atualiza o repositório direto na nuvem. Para ter as mudanças na sua máquina, rode `git pull` na pasta do projeto.
+- **Você no GitHub:** Code → arquivo → lápis (Edit) → edite → Commit changes. Na máquina: `git pull`.
+- **A IA (Cursor/outra):** A IA pode marcar direto aqui na pasta do projeto: edita o `CHECKLIST.md` (troca `[ ]` por `[x]`) e roda no PowerShell:
+  ```powershell
+  cd C:\Users\BruoN\erp-serralheria
+  git add CHECKLIST.md STATUS.md
+  git commit -m "chore: marcar itens concluídos no checklist"
+  git push
+  ```
+  Assim você não precisa ir no GitHub para marcar — a IA atualiza e envia sozinha.
 
 ---
 
