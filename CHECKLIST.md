@@ -223,7 +223,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Criar pedido na frente de loja
 - [x] Confirmar pedido
 - [x] Gerar OP automaticamente
-- [ ] Produção atualizar status e finalizar OP
+- [x] Produção atualizar status e finalizar OP
 - [ ] Baixar/consumir materiais do estoque
 - [ ] Gerar AR e marcar como pago no Caixa
 - [ ] Dashboard refletir os números
