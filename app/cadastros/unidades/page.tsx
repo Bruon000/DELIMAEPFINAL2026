@@ -153,9 +153,7 @@ export default function UnidadesPage() {
           {isLoading && <p>Carregando...</p>}
           {(units ?? []).map((u) => (
             <div key={u.id} className="flex items-center justify-between border rounded p-3">
-              <div>
-                <div className="font-medium">{u.code} - {u.name}</div>
-              </div>
+              <div className="font-medium">{u.code} - {u.name}</div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditing(u)}>Editar</Button>
                 <Button variant="destructive" size="sm" onClick={() => delMut.mutate(u.id)} disabled={delMut.isPending}>Remover</Button>
