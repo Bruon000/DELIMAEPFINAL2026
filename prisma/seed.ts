@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -16,124 +17,39 @@ async function main() {
     },
   });
 
-  const unit = await prisma.unitOfMeasure.upsert({
-    where: { id: "seed-unit-un" },
-    update: {},
-    create: {
-      id: "seed-unit-un",
-      companyId: company.id,
-      code: "UN",
-      name: "Unidade",
-      isActive: true,
-    },
+  const passwordHash = await bcrypt.hash("admin123", 10);
+
+  const existing = await prisma.user.findFirst({
+    where: { email: "admin@demo.com" },
+    select: { id: true },
   });
 
-  await prisma.unitOfMeasure.upsert({
-    where: { id: "seed-unit-m" },
-    update: {},
-    create: {
-      id: "seed-unit-m",
-      companyId: company.id,
-      code: "M",
-      name: "Metro",
-      isActive: true,
-    },
-  });
-
-  const category = await prisma.category.upsert({
-    where: { id: "seed-cat-1" },
-    update: {},
-    create: {
-      id: "seed-cat-1",
-      companyId: company.id,
-      name: "Portões",
-      slug: "portoes",
-      isActive: true,
-    },
-  });
-
-  const material = await prisma.material.upsert({
-    where: { id: "seed-mat-1" },
-    update: {},
-    create: {
-      id: "seed-mat-1",
-      companyId: company.id,
-      unitId: unit.id,
-      code: "CH-001",
-      name: "Chapa de ferro",
-      currentCost: 45.5,
-      minStock: 10,
-      isActive: true,
-    },
-  });
-
-  const product = await prisma.product.upsert({
-    where: { id: "seed-prod-1" },
-    update: {},
-    create: {
-      id: "seed-prod-1",
-      companyId: company.id,
-      categoryId: category.id,
-      unitId: unit.id,
-      code: "PORT-001",
-      name: "Portão padrão",
-      type: "COMPOSTO",
-      salePrice: 1200,
-      costPrice: 800,
-      markup: 50,
-      isActive: true,
-    },
-  });
-
-  await prisma.bOM.upsert({
-    where: { productId: product.id },
-    update: {},
-    create: {
-      productId: product.id,
-      lossPercent: 5,
-      items: {
-        create: [
-          {
-            materialId: material.id,
-            quantity: 2.5,
-          },
-        ],
+  if (existing?.id) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        name: "Admin Demo",
+        role: "ADMIN",
+        companyId: company.id,
+        isActive: true,
+        passwordHash,
       },
-    },
-  });
+    });
+  } else {
+    await prisma.user.create({
+      data: {
+        id: "seed-user-admin-1",
+        email: "admin@demo.com",
+        name: "Admin Demo",
+        role: "ADMIN",
+        companyId: company.id,
+        isActive: true,
+        passwordHash,
+      },
+    });
+  }
 
-  await prisma.stockItem.upsert({
-    where: { materialId: material.id },
-    update: {},
-    create: {
-      materialId: material.id,
-      quantity: 100,
-      reserved: 0,
-    },
-  });
-
-  const client = await prisma.client.upsert({
-    where: { id: "seed-client-1" },
-    update: {},
-    create: {
-      id: "seed-client-1",
-      companyId: company.id,
-      name: "Cliente Demo",
-      document: "000.000.000-00",
-      email: "cliente@demo.com",
-      phone: "(11) 98888-8888",
-      isActive: true,
-    },
-  });
-
-  console.log("Seed concluído:", {
-    company: company.name,
-    units: 2,
-    category: category.name,
-    material: material.name,
-    product: product.name,
-    client: client.name,
-  });
+  console.log("Seed OK:", { admin: "admin@demo.com / admin123", company: company.name });
 }
 
 main()
