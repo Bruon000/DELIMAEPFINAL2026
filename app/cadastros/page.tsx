@@ -7,6 +7,7 @@ export default function CadastrosPage() {
     { title: "Clientes", href: "/clientes", desc: "CRUD completo" },
     { title: "Produtos", href: "/cadastros/produtos", desc: "CRUD + BOM por produto" },
     { title: "Materiais", href: "/cadastros/materiais", desc: "CRUD + gera StockItem" },
+    { title: "Unidades", href: "/cadastros/unidades", desc: "CRUD de unidades (un, m, kg, l...)" },
     { title: "Estoque (visão)", href: "/estoque", desc: "Saldo e reservado" },
   ];
 
@@ -31,3 +32,4 @@ export default function CadastrosPage() {
     </div>
   );
 }
+

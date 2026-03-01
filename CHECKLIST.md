@@ -47,6 +47,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Serviços (instalação, transporte, pintura, etc.) (schema)
 - [x] Categorias/Tags (catálogo) (schema)
 - [ ] Telas de CRUD para todos os cadastros acima
+  - [x] Unidades (CRUD) — tela + API (GET/POST/PATCH/DELETE)
   - [x] Materiais (CRUD) — tela + API (GET/POST/PATCH/DELETE)
   - [x] Produtos (CRUD) — tela + API (GET/POST/PATCH/DELETE)
   - [x] Clientes (CRUD) — tela + API (GET/POST/PATCH/DELETE)
@@ -308,4 +309,5 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [ ] Seeds completos (unidades, materiais, categorias, exemplos)
 - [ ] Validações e masks (CPF/CNPJ, moeda, decimal)
 - [ ] Testes mínimos (smoke) e página “Saúde do sistema”
+
 

@@ -17,7 +17,30 @@ async function main() {
     },
   });
 
-  const passwordHash = await bcrypt.hash("admin123", 10);
+  
+  // Seed: unidades padrão
+  const units = [
+    { code: "un", name: "Unidade" },
+    { code: "m", name: "Metro" },
+    { code: "m2", name: "Metro quadrado" },
+    { code: "kg", name: "Quilograma" },
+    { code: "l", name: "Litro" },
+    { code: "barra", name: "Barra" },
+  ];
+
+  for (const u of units) {
+    const exists = await prisma.unitOfMeasure.findFirst({
+      where: { companyId: company.id, code: u.code },
+      select: { id: true },
+    });
+
+    if (!exists) {
+      await prisma.unitOfMeasure.create({
+        data: { companyId: company.id, code: u.code, name: u.name, isActive: true },
+      });
+    }
+  }
+const passwordHash = await bcrypt.hash("admin123", 10);
 
   const existing = await prisma.user.findFirst({
     where: { email: "admin@demo.com" },
@@ -60,3 +83,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
