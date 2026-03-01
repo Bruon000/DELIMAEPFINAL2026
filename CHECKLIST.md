@@ -71,7 +71,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] BOM por produto (itens + quantidades) (schema BOM + BOMItem)
 - [x] % de perda/sobra (opcional) (campo lossPercent no schema)
 - [ ] Cálculo de custo automático via BOM
-- [ ] Geração da "lista de materiais" por pedido (BOM * quantidade)
+- [x] Geração da "lista de materiais" por pedido (BOM * quantidade)
 - [ ] Base para custo de mão de obra (stub)
 - [ ] Base para terceiros (stub)
 - [x] Markup/margem configurável (base) — campo markup no Product
