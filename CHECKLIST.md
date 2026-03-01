@@ -14,7 +14,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 - [x] Plataforma modular (módulos separados + navegação clara)
 - [x] UI "fintech/olist": sidebar/topbar, cards (tabelas com filtros e ações rápidas pendentes)
-- [ ] Multiusuário + permissões por módulo/ação (RBAC)
+- [x] Multiusuário + permissões por módulo/ação (RBAC)
 - [x] Multiempresa preparado (Company), mesmo que MVP use 1
 - [ ] Logs/Auditoria (quem fez o quê e quando) — entidade AuditLog existe
 - [x] Padrão de status/timeline em fluxos (Pedido/Produção/Financeiro/Instalação)
@@ -26,8 +26,8 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 - [x] Login (NextAuth Credentials)
 - [x] Perfis: Admin, Vendedor, Caixa, Produção, Instalador, Contador (enum Role no schema)
-- [ ] CRUD de usuários (Admin)
-- [ ] Controle de permissões (base pronta para granularidade)
+- [x] CRUD de usuários (Admin)
+- [x] Controle de permissões (base pronta para granularidade)
 - [ ] Logs de auditoria (AuditLog) — entidade existe, falta registrar ações
 - [x] Soft delete / isActive em entidades críticas (schema)
 - [ ] Proteções básicas (CORS, Helmet, rate limit opcional)

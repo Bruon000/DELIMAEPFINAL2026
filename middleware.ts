@@ -4,7 +4,19 @@ export default withAuth(
   function middleware(req) {},
   {
     pages: { signIn: "/login" },
-    callbacks: { authorized: ({ token }) => !!token },
+    callbacks: {
+      authorized: ({ token, req }) => {
+        if (!token) return false;
+
+        const pathname = req.nextUrl.pathname;
+
+        if (pathname.startsWith("/admin")) {
+          // @ts-expect-error token.role custom
+          return token.role === "ADMIN";
+        }
+        return true;
+      },
+    },
   }
 );
 
