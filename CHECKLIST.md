@@ -238,3 +238,70 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - **Feito:** marque com `[x]`
 - **Parcial / em andamento:** pode anotar no item, ex: `[ ] Item (50% – falta X)`
 - Use este arquivo no GitHub para acompanhar evolução e retomar com IA ou equipe.
+
+---
+
+## ERP Completo — Backlog (para não faltar nada)
+
+### A) Estoque (operacional completo)
+- [ ] Movimentações (StockLedger) — listar com filtros (material, tipo, período)
+- [ ] Entrada de estoque (RECEIVED) — tela + API (compra/nota) atualiza StockItem.quantity e grava StockLedger
+- [ ] Saída de estoque manual (OUT/ADJUSTMENT negativo) — tela + API com motivo
+- [ ] Ajuste de inventário (ADJUSTMENT) — recalcular saldo e gravar ledger
+- [ ] Reservas (RESERVED) — visualizar reservas por pedido/OP
+- [ ] Consumo na produção (CONSUMED) — já baixa; falta gravar StockLedger (consumo) + auditoria
+- [ ] Alertas de mínimo (Material.minStock) — lista “abaixo do mínimo”
+- [ ] Histórico por material (extrato do material) — saldo antes/depois (balance) e referências
+
+### B) Compras / Fornecedores (base)
+- [ ] Cadastro de fornecedores (Supplier) — CRUD
+- [ ] Pedido de compra (PurchaseOrder) — criar/editar, itens, status
+- [ ] Recebimento de compra → gera entrada (RECEIVED) e atualiza custo/material
+
+### C) Fiscal / XML / NF-e (stub → completo)
+- [ ] Tabelas CFOP/CST/NCM — seeds simples
+- [ ] Importação XML de compra (NF-e entrada) — ler itens, mapear material/produto, gerar RECEIVED + ledger
+- [ ] Emissão/consulta/cancelamento NF-e (endpoints 501 inicialmente)
+- [ ] Webhook fiscal (log payload)
+- [ ] Configurações fiscais por empresa (FiscalConfig) — UI
+
+### D) Financeiro (carteira + caixa + pagar)
+- [ ] Caixa: fechar caixa (API) + validar diferenças (saldo esperado vs informado)
+- [ ] Caixa: saída (OUT) manual + motivo
+- [ ] Caixa: extrato completo (por sessão, período) + totais
+- [ ] Contas a Receber (carteira AR): listar PENDING/PAID/OVERDUE + filtros
+- [ ] Parcelamento AR (mínimo 1) — já gera; falta UI para ver parcelas
+- [ ] Contas a Pagar (AccountsPayable): CRUD + marcar pago + vincular ao caixa (OUT)
+- [ ] Relatórios: DRE simples, fluxo de caixa, inadimplência
+
+### E) Comercial (orçamentos e conversão)
+- [ ] Orçamentos: CRUD + itens + impressão/PDF
+- [ ] Converter orçamento → pedido
+- [ ] Descontos, condições, anexos do cliente/pedido
+- [ ] Timeline completa (OrderStatusHistory) — UI
+
+### F) Produção / Apontamentos
+- [ ] Apontamentos por etapa (corte/solda/pintura) — tempo e status
+- [ ] Bloqueios/pendências (BLOCKED) com motivo
+- [ ] Anexos na OP (desenho, medidas, fotos)
+- [ ] Checklist de qualidade e entrega
+
+### G) Instalação
+- [ ] Ordem de Instalação — UI do instalador (mobile)
+- [ ] Fotos/assinatura do cliente
+- [ ] Roteiro/agenda (calendário simples)
+
+### H) Usuários / Auditoria / Segurança
+- [ ] AuditLog — gravar ações críticas (login, CRUD, confirmar pedido, baixa estoque, recebimento)
+- [ ] Proteções básicas (rate limit, headers)
+- [ ] Permissões por módulo/ação (RBAC granular)
+
+### I) Integrações (Boletos / pagamentos)
+- [ ] Boletos: provider interface (IBoletoProvider)
+- [ ] UI “Gerar boleto” (integração pendente)
+- [ ] Webhook de pagamento / conciliação
+
+### J) Qualidade / Produto
+- [ ] Seeds completos (unidades, materiais, categorias, exemplos)
+- [ ] Validações e masks (CPF/CNPJ, moeda, decimal)
+- [ ] Testes mínimos (smoke) e página “Saúde do sistema”
