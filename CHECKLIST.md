@@ -24,7 +24,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 ## 1) Acesso, Usuários e Segurança
 
-- [ ] Login (JWT)
+- [x] Login (JWT)
 - [x] Perfis: Admin, Vendedor, Caixa, Produção, Instalador, Contador (enum Role no schema)
 - [ ] CRUD de usuários (Admin)
 - [ ] Controle de permissões (base pronta para granularidade)
