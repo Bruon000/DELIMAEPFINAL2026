@@ -59,7 +59,6 @@ const mainNav: NavItem[] = [
     children: [
       { title: "Visão geral", href: "/estoque" },
       { title: "Materiais", href: "/cadastros/materiais" },
-      { title: "Fornecedores", href: "/cadastros/fornecedores" },
       { title: "Entradas", href: "/estoque/entradas" },
       { title: "Movimentações", href: "/estoque/movimentacoes" },
           { title: "Compras", href: "/compras/pedidos" },
@@ -236,6 +235,7 @@ export function Sidebar() {
     </>
   );
 }
+
 
 
 
