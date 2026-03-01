@@ -15,7 +15,7 @@ async function fetchOrder(id: string) {
 
 async function fetchProducts() {
   const res = await fetch(`/api/products`);
-  if (!res.ok) return { products: [] }; // se não existir ainda, não quebra
+  if (!res.ok) return { products: [] };
   return res.json();
 }
 
@@ -38,6 +38,13 @@ async function removeItem(itemId: string) {
   return res.json();
 }
 
+async function confirmOrder(orderId: string) {
+  const res = await fetch(`/api/orders/${orderId}/confirm`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao confirmar");
+  return data;
+}
+
 export default function PedidoEditPage() {
   const params = useParams();
   const id = String(params.id);
@@ -49,6 +56,7 @@ export default function PedidoEditPage() {
   const [productId, setProductId] = React.useState("");
   const [quantity, setQuantity] = React.useState(1);
   const [unitPrice, setUnitPrice] = React.useState(0);
+  const [msg, setMsg] = React.useState<string | null>(null);
 
   const { data: prodData } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
 
@@ -60,17 +68,29 @@ export default function PedidoEditPage() {
       setUnitPrice(0);
       await qc.invalidateQueries({ queryKey: ["order", id] });
     },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
   const delMut = useMutation({
     mutationFn: (itemId: string) => removeItem(itemId),
     onSuccess: async () => qc.invalidateQueries({ queryKey: ["order", id] }),
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
+
+  const confMut = useMutation({
+    mutationFn: () => confirmOrder(id),
+    onSuccess: async () => {
+      setMsg("Pedido confirmado! OP e AR gerados.");
+      await qc.invalidateQueries({ queryKey: ["order", id] });
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
   if (isLoading) return <div className="p-6">Carregando...</div>;
   if (!order) return <div className="p-6">Pedido não encontrado.</div>;
 
   const total = (order.items ?? []).reduce((s: number, it: any) => s + Number(it.total ?? 0), 0);
+  const canConfirm = String(order.status) === "DRAFT";
 
   return (
     <div className="p-6 space-y-4">
@@ -78,10 +98,18 @@ export default function PedidoEditPage() {
 
       <Card>
         <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
-        <CardContent className="space-y-1">
+        <CardContent className="space-y-2">
           <div><b>Cliente:</b> {order.client?.name ?? "—"}</div>
           <div><b>Status:</b> {order.status}</div>
           <div><b>Total:</b> R$ {Number(total).toFixed(2)}</div>
+
+          <div className="pt-2 flex gap-2">
+            <Button disabled={!canConfirm || confMut.isPending} onClick={() => confMut.mutate()}>
+              {confMut.isPending ? "Confirmando..." : "Confirmar pedido"}
+            </Button>
+          </div>
+
+          {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
         </CardContent>
       </Card>
 

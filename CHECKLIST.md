@@ -81,7 +81,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Livro razão de estoque (StockLedger) (schema)
 - [x] Tipos de movimento: RECEIVED, RESERVED, CONSUMED, ADJUSTMENT (schema)
 - [ ] Entrada de compra (RECEIVED) — tela/fluxo
-- [ ] Reserva automática ao confirmar pedido (RESERVED) usando BOM
+- [x] Reserva automática ao confirmar pedido (RESERVED) usando BOM
 - [ ] Baixa ao finalizar produção (CONSUMED)
 - [ ] Ajuste manual (ADJUSTMENT)
 - [ ] Estoque mínimo + alertas (base) — campo minStock existe
@@ -91,7 +91,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 ## 6) Produção (PWA do Colaborador – receber pedidos fechados)
 
-- [ ] Ordem de Produção gerada ao CONFIRMAR pedido
+- [x] Ordem de Produção gerada ao CONFIRMAR pedido
 - [x] Status: QUEUED, IN_PROGRESS, BLOCKED, DONE (schema + constantes)
 - [x] Etapas de produção (Corte/Solda/Pintura/Montagem/Acabamento) (enum ProductionStep)
 - [x] Apontamento de tempo (TimeEntry) (schema)
@@ -119,7 +119,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 ### Contas a Receber (AR)
 
-- [ ] Gerar automaticamente ao confirmar pedido (mínimo 1 parcela)
+- [x] Gerar automaticamente ao confirmar pedido (mínimo 1 parcela)
 - [x] Parcelas (base pronta) — entidade AccountsReceivable
 - [x] Status: PENDING, PAID, OVERDUE, CANCELED (schema)
 - [ ] Baixa manual (mark paid)
@@ -221,7 +221,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 ## 15) Fluxos obrigatórios funcionando (MVP real)
 
 - [ ] Criar pedido na frente de loja
-- [ ] Confirmar pedido
+- [x] Confirmar pedido
 - [ ] Gerar OP automaticamente
 - [ ] Produção atualizar status e finalizar OP
 - [ ] Baixar/consumir materiais do estoque
