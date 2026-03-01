@@ -61,7 +61,8 @@ const mainNav: NavItem[] = [
       { title: "Materiais", href: "/cadastros/materiais" },
       { title: "Entradas", href: "/estoque/entradas" },
       { title: "Movimentações", href: "/estoque/movimentacoes" },
-    ],
+          { title: "Compras", href: "/compras/pedidos" },
+],
   },
 
   {
@@ -233,3 +234,4 @@ export function Sidebar() {
     </>
   );
 }
+

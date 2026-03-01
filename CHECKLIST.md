@@ -259,8 +259,8 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 ### B) Compras / Fornecedores (base)
 - [ ] Cadastro de fornecedores (Supplier) — CRUD
-- [ ] Pedido de compra (PurchaseOrder) — criar/editar, itens, status
-- [ ] Recebimento de compra → gera entrada (RECEIVED) e atualiza custo/material
+- [x] Pedido de compra (PurchaseOrder) — criar/editar, itens, status
+- [x] Recebimento de compra → gera entrada (RECEIVED) + StockLedger + atualiza StockItem
 
 ### C) Fiscal / XML / NF-e (stub → completo)
 - [ ] Tabelas CFOP/CST/NCM — seeds simples
