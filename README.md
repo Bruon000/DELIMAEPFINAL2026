@@ -2,7 +2,9 @@
 
 ERP modular para serralheria com foco em **produto**, **BOM**, **produção (PWA)** e **financeiro**. UI inspirada no Olist: sidebar colapsável, tabelas densas, cards e status badges.
 
-**Controle de progresso:** use o arquivo [CHECKLIST.md](./CHECKLIST.md) para marcar as etapas concluídas e retomar o desenvolvimento (com IA ou em equipe).
+**Controle de progresso e contexto para IA:**
+- **[STATUS.md](./STATUS.md)** — Leia primeiro. Diz onde o projeto está, próximos passos e como atualizar (para você ou outra IA continuarem).
+- **[CHECKLIST.md](./CHECKLIST.md)** — Lista completa do escopo; marque `[x]` no que for concluído e faça commit para o progresso ficar no Git.
 
 ## Tech stack
 
