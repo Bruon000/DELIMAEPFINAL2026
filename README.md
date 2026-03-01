@@ -2,9 +2,19 @@
 
 ERP modular para serralheria com foco em **produto**, **BOM**, **produção (PWA)** e **financeiro**. UI inspirada no Olist: sidebar colapsável, tabelas densas, cards e status badges.
 
-**Controle de progresso e contexto para IA:**
-- **[STATUS.md](./STATUS.md)** — Leia primeiro. Diz onde o projeto está, próximos passos e como atualizar (para você ou outra IA continuarem).
-- **[CHECKLIST.md](./CHECKLIST.md)** — Lista completa do escopo; marque `[x]` no que for concluído e faça commit para o progresso ficar no Git.
+---
+
+## 🤖 Se você é uma IA (ou vai usar IA para continuar)
+
+**Ao receber só o link deste repositório:** leia primeiro o arquivo **[PARA-IA.md](./PARA-IA.md)** (na raiz do projeto).  
+Lá está todo o contexto: o que é o projeto, onde estamos, o que fazer em seguida, onde está cada coisa e como atualizar o checklist (marcar + commit + push). Assim você só manda o link do repo e a IA entende tudo.
+
+---
+
+## Controle de progresso
+
+- **[STATUS.md](./STATUS.md)** — Fase atual e próximos passos (atualize quando mudar o foco).
+- **[CHECKLIST.md](./CHECKLIST.md)** — Lista completa do escopo; marque `[x]` no que for concluído e faça commit.
 
 ## Tech stack
 

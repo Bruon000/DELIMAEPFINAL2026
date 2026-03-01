@@ -1,6 +1,6 @@
 # Status do Projeto – Contexto para IA e Equipe
 
-**Objetivo:** Qualquer pessoa ou IA que abrir este repositório deve ler este arquivo primeiro para saber onde o projeto está e o que fazer em seguida.
+**Objetivo:** Qualquer pessoa ou IA que abrir este repositório deve ler este arquivo (ou o [PARA-IA.md](./PARA-IA.md), que aponta para cá) para saber onde o projeto está e o que fazer em seguida.
 
 ---
 
