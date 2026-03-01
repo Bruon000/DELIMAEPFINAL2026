@@ -13,6 +13,12 @@ async function fetchOrder(id: string) {
   return res.json();
 }
 
+async function fetchOrderMaterials(id: string) {
+  const res = await fetch(`/api/orders/${id}/materials`);
+  if (!res.ok) return { rows: [], shortages: [] };
+  return res.json();
+}
+
 async function fetchProducts() {
   const res = await fetch(`/api/products`);
   if (!res.ok) return { products: [] };
@@ -53,6 +59,12 @@ export default function PedidoEditPage() {
   const { data, isLoading } = useQuery({ queryKey: ["order", id], queryFn: () => fetchOrder(id) });
   const order = data?.order;
 
+  const { data: matData } = useQuery({
+    queryKey: ["order-materials", id],
+    queryFn: () => fetchOrderMaterials(id),
+    enabled: !!order,
+  });
+
   const [productId, setProductId] = React.useState("");
   const [quantity, setQuantity] = React.useState(1);
   const [unitPrice, setUnitPrice] = React.useState(0);
@@ -67,13 +79,17 @@ export default function PedidoEditPage() {
       setQuantity(1);
       setUnitPrice(0);
       await qc.invalidateQueries({ queryKey: ["order", id] });
+      await qc.invalidateQueries({ queryKey: ["order-materials", id] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
   const delMut = useMutation({
     mutationFn: (itemId: string) => removeItem(itemId),
-    onSuccess: async () => qc.invalidateQueries({ queryKey: ["order", id] }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["order", id] });
+      await qc.invalidateQueries({ queryKey: ["order-materials", id] });
+    },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
@@ -82,6 +98,7 @@ export default function PedidoEditPage() {
     onSuccess: async () => {
       setMsg("Pedido confirmado! OP e AR gerados.");
       await qc.invalidateQueries({ queryKey: ["order", id] });
+      await qc.invalidateQueries({ queryKey: ["order-materials", id] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
@@ -90,7 +107,9 @@ export default function PedidoEditPage() {
   if (!order) return <div className="p-6">Pedido não encontrado.</div>;
 
   const total = (order.items ?? []).reduce((s: number, it: any) => s + Number(it.total ?? 0), 0);
-  const canConfirm = String(order.status) === "DRAFT";
+
+  const shortages = matData?.shortages ?? [];
+  const canConfirm = String(order.status) === "DRAFT" && shortages.length === 0;
 
   return (
     <div className="p-6 space-y-4">
@@ -107,9 +126,35 @@ export default function PedidoEditPage() {
             <Button disabled={!canConfirm || confMut.isPending} onClick={() => confMut.mutate()}>
               {confMut.isPending ? "Confirmando..." : "Confirmar pedido"}
             </Button>
+            {!canConfirm && String(order.status) === "DRAFT" && shortages.length > 0 && (
+              <span className="text-sm text-red-600 self-center">Falta material no estoque para confirmar.</span>
+            )}
           </div>
 
           {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Materiais (BOM * quantidade)</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {(matData?.rows ?? []).length === 0 && (
+            <p className="text-muted-foreground">Sem BOM nos produtos do pedido (ou pedido sem itens).</p>
+          )}
+
+          {(matData?.rows ?? []).map((r: any) => (
+            <div key={r.materialId} className="flex items-center justify-between border rounded p-3">
+              <div>
+                <div className="font-medium">{r.code ? `${r.code} - ` : ""}{r.name}</div>
+                <div className="text-sm text-muted-foreground">
+                  Necessário: {Number(r.need ?? 0).toFixed(4)} · Disponível: {Number(r.available ?? 0).toFixed(4)}
+                </div>
+              </div>
+              <div className={r.ok ? "text-sm text-green-600" : "text-sm text-red-600"}>
+                {r.ok ? "OK" : "FALTA"}
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
@@ -137,7 +182,9 @@ export default function PedidoEditPage() {
             <div key={it.id} className="flex items-center justify-between border rounded p-3">
               <div>
                 <div className="font-medium">{it.product?.name ?? it.productId}</div>
-                <div className="text-sm text-muted-foreground">Qtd {it.quantity} · Unit R$ {Number(it.unitPrice ?? 0).toFixed(2)} · Total R$ {Number(it.total ?? 0).toFixed(2)}</div>
+                <div className="text-sm text-muted-foreground">
+                  Qtd {it.quantity} · Unit R$ {Number(it.unitPrice ?? 0).toFixed(2)} · Total R$ {Number(it.total ?? 0).toFixed(2)}
+                </div>
               </div>
               <Button variant="destructive" onClick={() => delMut.mutate(it.id)} disabled={delMut.isPending}>Remover</Button>
             </div>
