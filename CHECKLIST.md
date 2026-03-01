@@ -82,7 +82,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Tipos de movimento: RECEIVED, RESERVED, CONSUMED, ADJUSTMENT (schema)
 - [ ] Entrada de compra (RECEIVED) — tela/fluxo
 - [x] Reserva automática ao confirmar pedido (RESERVED) usando BOM
-- [ ] Baixa ao finalizar produção (CONSUMED)
+- [x] Baixa ao finalizar produção (CONSUMED)
 - [ ] Ajuste manual (ADJUSTMENT)
 - [ ] Estoque mínimo + alertas (base) — campo minStock existe
 - [ ] Inventário (contagem) base
@@ -96,9 +96,9 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Etapas de produção (Corte/Solda/Pintura/Montagem/Acabamento) (enum ProductionStep)
 - [x] Apontamento de tempo (TimeEntry) (schema)
 - [ ] PWA Produção (mobile-first)
-- [ ] Lista de OPs com filtro por status
+- [x] Lista de OPs com filtro por status
 - [ ] Detalhe da OP com: pedido, itens, anexos, materiais calculados
-- [ ] Atualizar status (iniciar/finalizar)
+- [x] Atualizar status (iniciar/finalizar)
 - [ ] Offline: cache + fila (outbox) de updates
 - [ ] Sync automático ao voltar online
 - [ ] Indicador "offline/sincronizando"
