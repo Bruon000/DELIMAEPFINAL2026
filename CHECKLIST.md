@@ -122,14 +122,14 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Gerar automaticamente ao confirmar pedido (mínimo 1 parcela)
 - [x] Parcelas (base pronta) — entidade AccountsReceivable
 - [x] Status: PENDING, PAID, OVERDUE, CANCELED (schema)
-- [ ] Baixa manual (mark paid)
+- [x] Baixa manual (mark paid)
 
 ### Caixa
 
 - [x] Abertura/fechamento de caixa (CashSession) (schema)
 - [x] Lançamentos (CashTransaction) (schema)
 - [ ] Tela de abertura/fechamento e lançamentos
-- [ ] Receber pagamento do pedido (vincular AR + registrar no caixa)
+- [x] Receber pagamento do pedido (vincular AR + registrar no caixa)
 
 ### Contas a Pagar (AP)
 
@@ -225,7 +225,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Gerar OP automaticamente
 - [x] Produção atualizar status e finalizar OP
 - [ ] Baixar/consumir materiais do estoque
-- [ ] Gerar AR e marcar como pago no Caixa
+- [x] Gerar AR e marcar como pago no Caixa
 - [ ] Dashboard refletir os números
 
 ---
