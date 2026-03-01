@@ -1,0 +1,660 @@
+// ERP Industrial Serralheria - Schema completo
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== 0) BASE: Multiempresa, Auditoria ==========
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  document  String?  // CNPJ
+  email     String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  theme      CompanyTheme?
+  users      User[]
+  clients    Client[]
+  suppliers  Supplier[]
+  products   Product[]
+  materials  Material[]
+  orders     Order[]
+  categories Category[]
+  units      UnitOfMeasure[]
+  financialCategories FinancialCategory[]
+  costCenters         CostCenter[]
+  fiscalConfig        FiscalConfig?
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+  apiKeys             ApiKey[]
+}
+
+model CompanyTheme {
+  id        String   @id @default(cuid())
+  companyId String   @unique
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  primaryColor   String?  // hex
+  secondaryColor String?
+  logoUrl        String?
+  darkMode       Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // CREATE, UPDATE, DELETE, LOGIN
+  entity     String   // Order, Product, etc.
+  entityId   String?
+  payload    Json?    // dados alterados
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+}
+
+// ========== 1) ACESSO, USUÁRIOS E SEGURANÇA ==========
+
+enum Role {
+  ADMIN
+  VENDEDOR
+  CAIXA
+  PRODUCAO
+  INSTALADOR
+  CONTADOR
+}
+
+model User {
+  id            String    @id @default(cuid())
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email         String
+  name          String
+  passwordHash  String?
+  role          Role      @default(VENDEDOR)
+  isActive      Boolean   @default(true)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  auditLogs     AuditLog[]
+  ordersCreated Order[]       @relation("OrderCreatedBy")
+  cashSessions  CashSession[]
+  notifications Notification[]
+  timeEntries   TimeEntry[]
+}
+
+// ========== 2) CADASTROS FUNDAMENTAIS ==========
+
+model UnitOfMeasure {
+  id       String   @id @default(cuid())
+  companyId String
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code     String   // m, kg, un, barra, etc.
+  name     String
+  isActive Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  materials Material[]
+  products  Product[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  document  String?  // CPF/CNPJ
+  email     String?
+  phone     String?
+  address   String?
+  city      String?
+  state     String?
+  zipCode   String?
+  isActive  Boolean  @default(true)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  document  String?
+  email     String?
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Collaborator {
+  id        String   @id @default(cuid())
+  companyId String   // pode virar FK para Company depois
+  name      String
+  document  String?
+  role      String?  // fábrica, instalação
+  isActive  Boolean  @default(true)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String?
+  parentId  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+model Material {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unitId        String
+  unit         UnitOfMeasure @relation(fields: [unitId], references: [id])
+  code         String?
+  name         String
+  description  String?
+  currentCost  Decimal   @default(0) @db.Decimal(15, 4)
+  minStock     Decimal?  @db.Decimal(15, 4) // alerta estoque mínimo
+  isActive     Boolean   @default(true)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stockItem   StockItem?
+  bomItems    BOMItem[]
+  stockLedger StockLedger[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  unitId      String
+  unit        UnitOfMeasure @relation(fields: [unitId], references: [id])
+  code        String?
+  name        String
+  description String?
+  type        ProductType @default(SIMPLE) // SIMPLE, COMPOSTO, SOB_MEDIDA
+  salePrice   Decimal   @default(0) @db.Decimal(15, 4)
+  costPrice   Decimal?  @db.Decimal(15, 4) // calculado via BOM
+  markup      Decimal?  @db.Decimal(8, 2)  // % margem
+  isActive    Boolean   @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bom           BOM?
+  orderItems    OrderItem[]
+  productionOrderItems ProductionOrderItem[]
+}
+
+enum ProductType {
+  SIMPLE
+  COMPOSTO
+  SOB_MEDIDA
+}
+
+model BOM {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  lossPercent Decimal? @db.Decimal(5, 2) // % perda/sobra
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items BOMItem[]
+}
+
+model BOMItem {
+  id         String   @id @default(cuid())
+  bomId      String
+  bom        BOM      @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantity   Decimal  @db.Decimal(15, 4)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([bomId, materialId])
+}
+
+// Serviços (instalação, transporte, pintura)
+model Service {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  defaultPrice Decimal? @db.Decimal(15, 4)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ========== 3) COMERCIAL - Pedidos ==========
+
+enum OrderStatus {
+  DRAFT
+  OPEN
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  INSTALLED
+  DELIVERED
+  CANCELED
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdById String?
+  createdBy   User?       @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  number      String?     // número do pedido (sequencial)
+  status      OrderStatus @default(DRAFT)
+  subtotal    Decimal     @default(0) @db.Decimal(15, 4)
+  discount    Decimal     @default(0) @db.Decimal(15, 4)
+  total       Decimal     @default(0) @db.Decimal(15, 4)
+  notes       String?
+  technicalNotes String?   // medidas, detalhes
+  confirmedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  items       OrderItem[]
+  statusHistory OrderStatusHistory[]
+  productionOrders ProductionOrder[]
+  accountsReceivable AccountsReceivable[]
+  installationOrder  InstallationOrder?
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  createdAt DateTime    @default(now())
+  createdBy String?
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Decimal  @db.Decimal(15, 4)
+  unitPrice Decimal  @db.Decimal(15, 4)
+  discount  Decimal  @default(0) @db.Decimal(15, 4)
+  total     Decimal  @db.Decimal(15, 4)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productionOrderItems ProductionOrderItem[]
+}
+
+// Orçamento (base pronta)
+model Quote {
+  id        String   @id @default(cuid())
+  companyId String
+  clientId  String
+  number    String?
+  status    String   @default("DRAFT") // DRAFT, SENT, CONVERTED, EXPIRED
+  total     Decimal  @default(0) @db.Decimal(15, 4)
+  validUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========== 5) ESTOQUE ==========
+
+enum StockMovementType {
+  RECEIVED   // entrada compra
+  RESERVED   // reserva ao confirmar pedido
+  CONSUMED   // baixa ao finalizar produção
+  ADJUSTMENT // ajuste manual
+  RETURN
+}
+
+model StockItem {
+  id         String   @id @default(cuid())
+  materialId String   @unique
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantity   Decimal  @default(0) @db.Decimal(15, 4)
+  reserved   Decimal  @default(0) @db.Decimal(15, 4)
+  updatedAt  DateTime @updatedAt
+}
+
+model StockLedger {
+  id         String            @id @default(cuid())
+  materialId String
+  material   Material          @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  type       StockMovementType
+  quantity   Decimal           @db.Decimal(15, 4) // positivo entrada, negativo saída
+  balance    Decimal           @db.Decimal(15, 4)  // saldo após movimento
+  reference  String?           // Order.id, ProductionOrder.id, etc.
+  note       String?
+  createdAt  DateTime          @default(now())
+  createdBy  String?
+}
+
+// ========== 6) PRODUÇÃO (PWA) ==========
+
+enum ProductionOrderStatus {
+  QUEUED
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum ProductionStep {
+  CORTE
+  SOLDA
+  PINTURA
+  MONTAGEM
+  ACABAMENTO
+}
+
+model ProductionOrder {
+  id        String                 @id @default(cuid())
+  companyId String
+  orderId   String
+  order     Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  number    String?                // OP-001
+  status    ProductionOrderStatus  @default(QUEUED)
+  currentStep ProductionStep?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items      ProductionOrderItem[]
+  statusHistory ProductionOrderStatusHistory[]
+  timeEntries   TimeEntry[]
+}
+
+model ProductionOrderStatusHistory {
+  id        String                 @id @default(cuid())
+  productionOrderId String
+  productionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  status    ProductionOrderStatus
+  step      ProductionStep?
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model ProductionOrderItem {
+  id                 String           @id @default(cuid())
+  productionOrderId  String
+  productionOrder    ProductionOrder  @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  orderItemId        String
+  orderItem          OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  productId          String
+  product            Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity           Decimal          @db.Decimal(15, 4)
+  status             ProductionOrderStatus @default(QUEUED)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model TimeEntry {
+  id                 String           @id @default(cuid())
+  productionOrderId  String
+  productionOrder    ProductionOrder  @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  userId             String?
+  user               User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  step               ProductionStep
+  startedAt          DateTime
+  finishedAt         DateTime?
+  durationMinutes    Int?
+  note               String?
+  syncedAt           DateTime?        // PWA offline sync
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ========== 7) INSTALAÇÃO / ENTREGA ==========
+
+enum InstallationStatus {
+  SCHEDULED
+  ON_THE_WAY
+  INSTALLED
+  FAILED
+}
+
+model InstallationOrder {
+  id        String             @id @default(cuid())
+  orderId   String             @unique
+  order     Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    InstallationStatus @default(SCHEDULED)
+  scheduledAt DateTime?
+  installedAt DateTime?
+  checklist Json?              // stub
+  photos    String[]           // URLs stub
+  signatureUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========== 8) FINANCEIRO ==========
+
+model FinancialCategory {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  type      String   // INCOME, EXPENSE
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CostCenter {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AccountsReceivableStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+model AccountsReceivable {
+  id          String                    @id @default(cuid())
+  companyId   String
+  orderId     String
+  order       Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dueDate     DateTime
+  amount      Decimal                   @db.Decimal(15, 4)
+  status      AccountsReceivableStatus  @default(PENDING)
+  paidAt      DateTime?
+  paidAmount  Decimal?                  @db.Decimal(15, 4)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+}
+
+model CashSession {
+  id        String   @id @default(cuid())
+  companyId String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  openedAt  DateTime @default(now())
+  closedAt  DateTime?
+  openingBalance Decimal @default(0) @db.Decimal(15, 4)
+  closingBalance Decimal? @db.Decimal(15, 4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions CashTransaction[]
+}
+
+model CashTransaction {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     CashSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type        String   // IN, OUT
+  amount      Decimal  @db.Decimal(15, 4)
+  description String?
+  reference   String?  // AR id, etc.
+  createdAt   DateTime @default(now())
+}
+
+enum AccountsPayableStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+model AccountsPayable {
+  id          String                   @id @default(cuid())
+  companyId   String
+  dueDate     DateTime
+  amount      Decimal                  @db.Decimal(15, 4)
+  description String?
+  status      AccountsPayableStatus    @default(PENDING)
+  paidAt      DateTime?
+  categoryId  String?
+  costCenterId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FinancialTransaction {
+  id        String   @id @default(cuid())
+  companyId String
+  type      String   // RECEIPT, PAYMENT, TRANSFER
+  amount    Decimal  @db.Decimal(15, 4)
+  date      DateTime
+  description String?
+  categoryId String?
+  costCenterId String?
+  reference String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========== 9) BOLETOS (Stub plugável) ==========
+
+model Boleto {
+  id          String   @id @default(cuid())
+  companyId   String
+  accountsReceivableId String?
+  amount      Decimal  @db.Decimal(15, 4)
+  dueDate     DateTime
+  status      String   // PENDING, PAID, CANCELLED
+  provider    String?  // asaas, gerencianet, etc.
+  externalId  String?
+  digitableLine String?
+  pdfUrl      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ========== 10) FISCAL (Stub) ==========
+
+model FiscalConfig {
+  id        String   @id @default(cuid())
+  companyId String   @unique
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  regime    String?  // SIMPLES, LUCRO_PRESUMIDO, etc.
+  certSerial String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FiscalInvoice {
+  id        String   @id @default(cuid())
+  companyId String
+  orderId   String?
+  number    String?
+  key       String?
+  status    String   // PENDING, ISSUED, CANCELLED
+  type      String   // NF-E, NFS-E
+  issuedAt  DateTime?
+  payload   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========== 11) NOTIFICAÇÕES ==========
+
+model Notification {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String?
+  type      String?
+  readAt    DateTime?
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+// ========== 13) INTEGRAÇÕES ==========
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  key       String   @unique
+  isActive  Boolean  @default(true)
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WebhookLog {
+  id        String   @id @default(cuid())
+  source    String
+  payload   Json
+  status   Int?
+  createdAt DateTime @default(now())
+}
