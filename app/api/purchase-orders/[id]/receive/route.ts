@@ -28,8 +28,14 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     for (const it of poItems) {
       const materialId = String(it.materialId);
       const qty = n(it.quantity);
+const unitCost = n(it.unitCost);if (unitCost > 0) {
+  await tx.material.update({
+    where: { id: materialId } as any,
+    data: { currentCost: unitCost } as any,
+  } as any);
+}
 
-      const stock = await tx.stockItem.upsert({
+const stock = await tx.stockItem.upsert({
         where: { materialId } as any,
         update: {},
         create: { materialId, quantity: 0, reserved: 0 } as any,
@@ -49,7 +55,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
           type: "RECEIVED" as any,
           quantity: qty,
           balance: newQty,
-          reference: po.id,
+          reference: `PO:${po.id}`,
           note: "Recebimento de compra (PO)",
           createdBy: userId,
         } as any,
@@ -66,3 +72,4 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   return NextResponse.json({ ok: true, ...result });
 }
+

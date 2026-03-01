@@ -16,9 +16,9 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const quantity = n(body?.quantity);
   const unitCost = n(body?.unitCost);
 
-  if (!materialId || quantity <= 0) return NextResponse.json({ error: "invalid_item" }, { status: 400 });
-
-  const po = await prisma.purchaseOrder.findFirst({ where: { id: poId, companyId, deletedAt: null } } as any);
+  if (!materialId || quantity <= 0 || unitCost <= 0) {
+  return NextResponse.json({ error: "invalid_item" }, { status: 400 });
+}const po = await prisma.purchaseOrder.findFirst({ where: { id: poId, companyId, deletedAt: null } } as any);
   if (!po) return NextResponse.json({ error: "po_not_found" }, { status: 404 });
   if (String(po.status) !== "DRAFT") return NextResponse.json({ error: "po_not_draft" }, { status: 400 });
 
@@ -34,3 +34,4 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   return NextResponse.json({ item }, { status: 201 });
 }
+
