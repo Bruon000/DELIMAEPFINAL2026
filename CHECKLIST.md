@@ -244,8 +244,8 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 ## ERP Completo — Backlog (para não faltar nada)
 
 ### A) Estoque (operacional completo)
-- [ ] Movimentações (StockLedger) — listar com filtros (material, tipo, período)
-- [ ] Entrada de estoque (RECEIVED) — tela + API (compra/nota) atualiza StockItem.quantity e grava StockLedger
+- [x] Movimentações (StockLedger) — listar com filtros (material, tipo, período)
+- [x] Entrada de estoque (RECEIVED) — tela + API (compra/nota) atualiza StockItem.quantity e grava StockLedger
 - [ ] Saída de estoque manual (OUT/ADJUSTMENT negativo) — tela + API com motivo
 - [ ] Ajuste de inventário (ADJUSTMENT) — recalcular saldo e gravar ledger
 - [ ] Reservas (RESERVED) — visualizar reservas por pedido/OP
