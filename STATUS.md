@@ -6,6 +6,7 @@
 
 ## Onde estamos (última atualização)
 
+- **Última verificação:** 01/03/2026 — Atualização de teste: se você está vendo esta linha no GitHub, a marcação/atualização no Git está funcionando. ✅
 - **Fase atual:** Esqueleto inicial entregue. Backend (Prisma, APIs), layout Olist (sidebar/topbar), dashboard com cards e checklist completo no repositório.
 - **Próximos passos sugeridos (em ordem):**
   1. Login (NextAuth ou Clerk) + proteção de rotas
