@@ -62,8 +62,19 @@ export default function OpDetailPage() {
   const stock = data?.stock ?? [];
   const stockMap = new Map(stock.map((s: any) => [s.materialId, s]));
 
+  const rows = Object.entries(required).map(([materialId, need]: any) => {
+    const s = stockMap.get(materialId);
+    const qty = Number(s?.quantity ?? 0);
+    const res = Number(s?.reserved ?? 0);
+    const available = qty - res;
+    const ok = available + 1e-9 >= Number(need);
+    return { materialId, need: Number(need), qty, res, available, ok };
+  });
+
+  const hasShortage = rows.some((r) => !r.ok);
+
   const canStart = String(op.status) === "PENDING";
-  const canFinish = String(op.status) === "IN_PROGRESS";
+  const canFinish = String(op.status) === "IN_PROGRESS" && !hasShortage;
 
   return (
     <div className="p-6 space-y-4">
@@ -71,18 +82,23 @@ export default function OpDetailPage() {
 
       <Card>
         <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
-        <CardContent className="space-y-1">
+        <CardContent className="space-y-2">
           <div><b>Status:</b> {op.status}</div>
           <div><b>Pedido:</b> {op.orderId}</div>
           <div><b>Cliente:</b> {op.order?.client?.name ?? "—"}</div>
 
-          <div className="pt-2 flex gap-2">
+          <div className="pt-2 flex gap-2 items-center">
             <Button disabled={!canStart || startMut.isPending} onClick={() => startMut.mutate()}>
               {startMut.isPending ? "Iniciando..." : "Iniciar"}
             </Button>
+
             <Button disabled={!canFinish || finishMut.isPending} onClick={() => finishMut.mutate()}>
               {finishMut.isPending ? "Finalizando..." : "Finalizar (baixar materiais)"}
             </Button>
+
+            {String(op.status) === "IN_PROGRESS" && hasShortage && (
+              <span className="text-sm text-red-600">Falta material disponível (estoque - reservado).</span>
+            )}
           </div>
 
           {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
@@ -92,20 +108,21 @@ export default function OpDetailPage() {
       <Card>
         <CardHeader><CardTitle>Materiais (calculado por BOM)</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {Object.keys(required).length === 0 && <p className="text-muted-foreground">Sem BOM nos produtos.</p>}
-          {Object.entries(required).map(([materialId, need]: any) => {
-            const s = stockMap.get(materialId);
-            const qty = Number(s?.quantity ?? 0);
-            const res = Number(s?.reserved ?? 0);
-            return (
-              <div key={materialId} className="flex justify-between border rounded p-3">
-                <div className="font-medium">{materialId}</div>
+          {rows.length === 0 && <p className="text-muted-foreground">Sem BOM nos produtos.</p>}
+
+          {rows.map((r) => (
+            <div key={r.materialId} className="flex items-center justify-between border rounded p-3">
+              <div>
+                <div className="font-medium">{r.materialId}</div>
                 <div className="text-sm text-muted-foreground">
-                  Necessário: {Number(need).toFixed(3)} · Estoque: {qty.toFixed(3)} · Reservado: {res.toFixed(3)}
+                  Necessário: {r.need.toFixed(4)} · Disponível: {r.available.toFixed(4)} · Estoque: {r.qty.toFixed(4)} · Reservado: {r.res.toFixed(4)}
                 </div>
               </div>
-            );
-          })}
+              <div className={r.ok ? "text-sm text-green-600" : "text-sm text-red-600"}>
+                {r.ok ? "OK" : "FALTA"}
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
     </div>
