@@ -52,6 +52,16 @@ async function deleteProduct(id: string) {
   return data;
 }
 
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-sm font-medium">{label}</div>
+      {children}
+      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
 export default function ProdutosPage() {
   const qc = useQueryClient();
   const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
@@ -89,7 +99,7 @@ export default function ProdutosPage() {
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const current = editing ?? (form as any);
+  const current: any = editing ?? form;
 
   return (
     <div className="p-6 space-y-4">
@@ -98,28 +108,69 @@ export default function ProdutosPage() {
 
       <Card>
         <CardHeader><CardTitle>{editing ? "Editar produto" : "Novo produto"}</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input placeholder="Nome" value={current.name ?? ""} onChange={(e) => {
-              const v = e.target.value;
-              editing ? setEditing({ ...editing, name: v }) : setForm({ ...form, name: v });
-            }} />
-            <Input placeholder="Código" value={current.code ?? ""} onChange={(e) => {
-              const v = e.target.value;
-              editing ? setEditing({ ...editing, code: v }) : setForm({ ...form, code: v });
-            }} />
-            <Input placeholder="Preço venda" type="number" value={Number(current.salePrice ?? 0)} onChange={(e) => {
-              const v = Number(e.target.value);
-              editing ? setEditing({ ...editing, salePrice: v }) : setForm({ ...form, salePrice: v });
-            }} />
-            <Input placeholder="Custo" type="number" value={Number(current.costPrice ?? 0)} onChange={(e) => {
-              const v = Number(e.target.value);
-              editing ? setEditing({ ...editing, costPrice: v }) : setForm({ ...form, costPrice: v });
-            }} />
-            <Input placeholder="Tipo (COMPOSTO/SIMPLES)" value={String(current.type ?? "COMPOSTO")} onChange={(e) => {
-              const v = e.target.value;
-              editing ? setEditing({ ...editing, type: v }) : setForm({ ...form, type: v });
-            }} />
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Nome *" hint="Ex.: Portão basculante, Grade janela, Corrimão...">
+              <Input
+                placeholder="Nome do produto"
+                value={current.name ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  editing ? setEditing({ ...editing, name: v }) : setForm({ ...form, name: v });
+                }}
+              />
+            </Field>
+
+            <Field label="Código / SKU" hint="Ex.: 000025, PT-01, CORR-10...">
+              <Input
+                placeholder="Código (opcional)"
+                value={current.code ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  editing ? setEditing({ ...editing, code: v }) : setForm({ ...form, code: v });
+                }}
+              />
+            </Field>
+
+            <Field label="Preço de venda (R$)" hint="Use ponto para centavos. Ex.: 1999.90">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={Number(current.salePrice ?? 0)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  editing ? setEditing({ ...editing, salePrice: v }) : setForm({ ...form, salePrice: v });
+                }}
+              />
+            </Field>
+
+            <Field label="Custo (R$)" hint="Custo estimado do produto. Ex.: 1200.00">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={Number(current.costPrice ?? 0)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  editing ? setEditing({ ...editing, costPrice: v }) : setForm({ ...form, costPrice: v });
+                }}
+              />
+            </Field>
+
+            <Field label="Tipo" hint="COMPOSTO usa BOM; SIMPLES não usa BOM.">
+              <select
+                className="border rounded p-2 w-full"
+                value={String(current.type ?? "COMPOSTO")}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  editing ? setEditing({ ...editing, type: v }) : setForm({ ...form, type: v });
+                }}
+              >
+                <option value="COMPOSTO">COMPOSTO</option>
+                <option value="SIMPLES">SIMPLES</option>
+              </select>
+            </Field>
           </div>
 
           <div className="flex gap-2">
