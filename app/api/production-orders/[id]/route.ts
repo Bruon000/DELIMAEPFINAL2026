@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth";
 export async function GET(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
 
   const id = ctx.params.id;
@@ -34,7 +33,7 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
 
   // calcular materiais necessários via BOM * quantidade
   const requiredByMaterial: Record<string, number> = {};
-  const items = op.order?.items ?? [];
+  const items = (op as any).order?.items ?? [];
 
   for (const it of items) {
     const qtyProduct = Number(it.quantity ?? 0);

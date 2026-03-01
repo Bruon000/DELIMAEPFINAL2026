@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth";
 export async function GET() {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
 
   const products = await prisma.product.findMany({
@@ -21,7 +20,6 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
 
   const body = await req.json().catch(() => null);

@@ -7,7 +7,6 @@ function n(x: any) { return Number(x ?? 0); }
 export async function GET(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
 
   const orderId = ctx.params.id;
@@ -26,8 +25,9 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   if (!order) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const required = new Map<string, number>();
+  const orderItems = (order as any).items ?? [];
 
-  for (const it of order.items ?? []) {
+  for (const it of orderItems) {
     const qtyProduct = n(it.quantity);
     const bom = (it.product as any)?.bom;
     if (!bom?.items?.length) continue;

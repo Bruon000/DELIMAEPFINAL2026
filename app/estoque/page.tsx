@@ -3,7 +3,6 @@ import { getSession } from "@/lib/auth";
 
 export default async function EstoquePage() {
   const session = await getSession();
-  // @ts-expect-error
   const companyId = session?.user?.companyId as string | undefined;
 
   if (!companyId) {
@@ -28,7 +27,7 @@ export default async function EstoquePage() {
           <div key={it.id} className="flex items-center justify-between border rounded p-3">
             <div>
               <div className="font-medium">{it.material.code ? `${it.material.code} - ` : ""}{it.material.name}</div>
-              <div className="text-sm text-muted-foreground">Min: {it.material.minStock ?? "-"} </div>
+              <div className="text-sm text-muted-foreground">Min: {it.material.minStock != null ? Number(it.material.minStock) : "-"} </div>
             </div>
             <div className="text-sm text-muted-foreground">
               Qtd: {Number(it.quantity).toFixed(4)} · Reservado: {Number(it.reserved).toFixed(4)}

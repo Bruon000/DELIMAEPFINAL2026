@@ -63,7 +63,7 @@ export default function OpDetailPage() {
   const stockMap = new Map(stock.map((s: any) => [s.materialId, s]));
 
   const rows = Object.entries(required).map(([materialId, need]: any) => {
-    const s = stockMap.get(materialId);
+    const s = stockMap.get(materialId) as { quantity?: unknown; reserved?: unknown } | undefined;
     const qty = Number(s?.quantity ?? 0);
     const res = Number(s?.reserved ?? 0);
     const available = qty - res;

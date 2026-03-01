@@ -11,8 +11,7 @@ export default withAuth(
         const pathname = req.nextUrl.pathname;
 
         if (pathname.startsWith("/admin")) {
-          // @ts-expect-error token.role custom
-          return token.role === "ADMIN";
+          return (token as { role?: string }).role === "ADMIN";
         }
         return true;
       },

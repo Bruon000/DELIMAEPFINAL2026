@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth";
 
 export async function GET() {
   const session = await getSession();
-  // @ts-expect-error
   if (!session?.user || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -29,7 +28,6 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getSession();
-  // @ts-expect-error
   if (!session?.user || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

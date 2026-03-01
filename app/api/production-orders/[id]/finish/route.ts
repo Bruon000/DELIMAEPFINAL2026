@@ -7,9 +7,7 @@ function n(x: any) { return Number(x ?? 0); }
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
-  // @ts-expect-error
   const userId = session.user.id as string;
 
   const id = ctx.params.id;
@@ -33,7 +31,8 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   // calcular consumo
   const requiredByMaterial = new Map<string, number>();
-  for (const it of op.order?.items ?? []) {
+  const orderItems = (op as any).order?.items ?? [];
+  for (const it of orderItems) {
     const qtyProduct = n(it.quantity);
     const bom = (it.product as any)?.bom;
     if (!bom?.items?.length) continue;
@@ -57,7 +56,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   // valida: reserved tem que cobrir o consumo (porque reservamos no confirm)
   const issues: any[] = [];
-  for (const [mid, need] of requiredByMaterial.entries()) {
+  for (const [mid, need] of Array.from(requiredByMaterial.entries())) {
     const s = stockMap.get(mid) ?? { qty: 0, res: 0 };
     if (s.res + 1e-9 < need) issues.push({ materialId: mid, need, reserved: s.res });
     if (s.qty + 1e-9 < need) issues.push({ materialId: mid, need, quantity: s.qty });
@@ -65,7 +64,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   if (issues.length) return NextResponse.json({ error: "stock_inconsistent", issues }, { status: 409 });
 
   await prisma.$transaction(async (tx) => {
-    for (const [mid, need] of requiredByMaterial.entries()) {
+    for (const [mid, need] of Array.from(requiredByMaterial.entries())) {
       const s = stockMap.get(mid)!;
       const newQty = s.qty - need;
       const newRes = s.res - need;

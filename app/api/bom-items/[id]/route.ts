@@ -9,7 +9,8 @@ export async function DELETE(req: Request, ctx: { params: { id: string } }) {
   const id = ctx.params.id;
 
   // (opcional) validar company via joins (MVP: delete direto)
-  await prisma.bomItem.delete({ where: { id } as any } as any);
+  await prisma.bOMItem.delete({ where: { id } as any } as any);
 
   return NextResponse.json({ ok: true });
 }
+

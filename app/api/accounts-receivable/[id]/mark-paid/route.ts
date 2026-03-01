@@ -7,10 +7,8 @@ function n(x: any) { return Number(x ?? 0); }
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
-  const userId = session.user.id as string;
-
-  const id = ctx.params.id;
+  const companyId = session?.user?.companyId;const userId = session?.user?.id;const id = ctx.params.id;
+  if (!companyId || !userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const ar = await prisma.accountsReceivable.findFirst({
     where: { id, companyId },
@@ -54,7 +52,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     // 3) Registrar transação IN
     const description =
       note ||
-      `Recebimento AR ${updatedAr.id} (Pedido ${(ar.order as any)?.id ?? ar.orderId})`;
+      `Recebimento AR ${updatedAr.id} (Pedido ${ar.orderId})`;
 
     const cashTx = await tx.cashTransaction.create({
       data: {
@@ -73,4 +71,6 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   return NextResponse.json({ ok: true, ...result });
 }
+
+
 

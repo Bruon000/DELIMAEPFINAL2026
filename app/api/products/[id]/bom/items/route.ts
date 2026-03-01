@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth";
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
 
   const productId = ctx.params.id;
@@ -20,13 +19,13 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   if (!product) return NextResponse.json({ error: "product_not_found" }, { status: 404 });
 
   // garante BOM
-  const bom = await prisma.bom.upsert({
+  const bom = await prisma.bOM.upsert({
     where: { productId } as any,
     update: {},
     create: { productId, lossPercent: 0 } as any,
   } as any);
 
-  const item = await prisma.bomItem.create({
+  const item = await prisma.bOMItem.create({
     data: {
       id: `bmi_${Date.now()}`,
       bomId: bom.id,

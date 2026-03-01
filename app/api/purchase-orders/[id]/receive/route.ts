@@ -7,9 +7,7 @@ function n(x: any) { return Number(x ?? 0); }
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  // @ts-expect-error
   const userId = session.user.id as string;
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
 
   const id = ctx.params.id;
@@ -20,13 +18,14 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   } as any);
 
   if (!po) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  if (!po.items?.length) return NextResponse.json({ error: "po_no_items" }, { status: 400 });
+  const poItems = (po as any).items ?? [];
+  if (!poItems.length) return NextResponse.json({ error: "po_no_items" }, { status: 400 });
 
   const st = String(po.status);
   if (st === "RECEIVED" || st === "CANCELED") return NextResponse.json({ error: "invalid_status", status: po.status }, { status: 400 });
 
   const result = await prisma.$transaction(async (tx) => {
-    for (const it of po.items) {
+    for (const it of poItems) {
       const materialId = String(it.materialId);
       const qty = n(it.quantity);
 

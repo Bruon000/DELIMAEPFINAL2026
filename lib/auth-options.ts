@@ -3,7 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
-const authOptions: NextAuthOptions = {
+export const authOptions: NextAuthOptions = {
   debug: false,
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
@@ -31,10 +31,29 @@ const authOptions: NextAuthOptions = {
           id: user.id,
           name: user.name,
           email: user.email,
-          // @ts-expect-error extras via callbacks
           role: user.role,
-          // @ts-expect-error
           companyId: user.companyId,
         };
-
-export { authOptions };
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        (token as Record<string, unknown>).role = (user as { role?: string }).role;
+        (token as Record<string, unknown>).companyId = (user as { companyId?: string }).companyId;
+        token.sub = user.id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as Record<string, unknown>).id = token.sub;
+        (session.user as Record<string, unknown>).role = (token as Record<string, unknown>).role;
+        (session.user as Record<string, unknown>).companyId = (token as Record<string, unknown>).companyId;
+      }
+      return session;
+    },
+  },
+  pages: { signIn: "/login" },
+};

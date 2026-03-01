@@ -10,9 +10,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
-  // @ts-expect-error
   const userId = session.user.id as string;
 
   const orderId = ctx.params.id;
@@ -34,7 +32,8 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   } as any);
 
   if (!order) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
-  if (!order.items?.length) return NextResponse.json({ error: "order_has_no_items" }, { status: 400 });
+  const items = (order as any).items;
+  if (!items?.length) return NextResponse.json({ error: "order_has_no_items" }, { status: 400 });
 
   // se já confirmado, não faz de novo
   if (String(order.status) !== "DRAFT") {
@@ -44,7 +43,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   // calcular materiais necessários via BOM
   const requiredByMaterial = new Map<string, number>();
 
-  for (const it of order.items) {
+  for (const it of items) {
     const qtyProduct = sum(it.quantity);
     const bom = (it.product as any)?.bom;
     if (!bom?.items?.length) continue;
@@ -70,7 +69,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   // validar disponibilidade: (qty - reserved) >= need
   const shortages: any[] = [];
-  for (const [materialId, need] of requiredByMaterial.entries()) {
+  for (const [materialId, need] of Array.from(requiredByMaterial.entries())) {
     const s = stockMap.get(materialId) ?? { qty: 0, res: 0 };
     const available = s.qty - s.res;
     if (available + 1e-9 < need) {
@@ -83,7 +82,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   }
 
   // total do pedido
-  const total = order.items.reduce((acc: number, it: any) => acc + sum(it.total), 0);
+  const total = items.reduce((acc: number, it: any) => acc + sum(it.total), 0);
 
   // transação: confirma pedido + reserva estoque + cria OP + cria AR + grava ledger
   const result = await prisma.$transaction(async (tx) => {
@@ -94,7 +93,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     });
 
     // 2) reservar estoque + ledger RESERVED
-    for (const [materialId, need] of requiredByMaterial.entries()) {
+    for (const [materialId, need] of Array.from(requiredByMaterial.entries())) {
       const current = stockMap.get(materialId)!;
       const newReserved = current.res + need;
 
