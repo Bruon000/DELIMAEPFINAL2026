@@ -9,12 +9,11 @@
 - **Última verificação:** 01/03/2026 — Atualização de teste: se você está vendo esta linha no GitHub, a marcação/atualização no Git está funcionando. ✅
 - **Fase atual:** Esqueleto inicial entregue. Backend (Prisma, APIs), layout Olist (sidebar/topbar), dashboard com cards e checklist completo no repositório.
 - **Próximos passos sugeridos (em ordem):**
-  1. Login (NextAuth ou Clerk) + proteção de rotas
-  2. CRUD de usuários (tela Admin) e uso de permissões (RBAC)
-  3. Fluxo Comercial: tela de lista de pedidos + criar/editar pedido com itens
-  4. Ao confirmar pedido: gerar OP + reservar estoque + gerar AR
-  5. Telas de Caixa (abrir/fechar, receber pagamento) e Estoque (movimentações)
-
+  1. Produção: lista de OPs + detalhe + atualizar status + baixa de materiais (CONSUMED)
+  2. Caixa: receber pagamento (vincular AR + registrar no caixa)
+  3. Cadastros: telas de CRUD (começar por Clientes)
+  4. Busca global + ações rápidas (topbar)
+  5. Logs de auditoria + proteções básicas (CORS/Helmet)
 ---
 
 ## Como saber o que já foi feito
@@ -57,5 +56,6 @@ Assim, na próxima sessão (ou em outra máquina/IA), o contexto continua no Git
 
 - **Stack:** Next.js 14 (App Router), TypeScript, Tailwind, Shadcn/UI, Prisma (PostgreSQL), TanStack Query.
 - **Estrutura:** `app/` (rotas e páginas), `components/` (layout + ui + modules), `lib/` (prisma, utils, constants), `prisma/schema.prisma` (modelo completo).
-- **Auth:** Ainda não implementado (NextAuth/Clerk planejado). RBAC via enum `Role` no schema.
+- **Auth:** Implementado com NextAuth (Credentials) + proteção de rotas (middleware). RBAC básico: /admin apenas ADMIN.
 - **Fluxo principal a implementar:** Pedido → Confirmar → OP + reserva estoque + AR → Produção → Consumir estoque → Caixa (receber pagamento) → Dashboard reflete.
+

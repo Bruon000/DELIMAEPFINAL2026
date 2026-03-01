@@ -220,9 +220,9 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 ## 15) Fluxos obrigatórios funcionando (MVP real)
 
-- [ ] Criar pedido na frente de loja
+- [x] Criar pedido na frente de loja
 - [x] Confirmar pedido
-- [ ] Gerar OP automaticamente
+- [x] Gerar OP automaticamente
 - [ ] Produção atualizar status e finalizar OP
 - [ ] Baixar/consumir materiais do estoque
 - [ ] Gerar AR e marcar como pago no Caixa
