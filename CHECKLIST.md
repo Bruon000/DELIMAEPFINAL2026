@@ -53,8 +53,8 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 ## 3) Comercial (Estilo Olist)
 
 - [x] Orçamentos (BASE pronta; UI pode ficar opcional/oculta) — entidade Quote no schema
-- [ ] Pedidos (frente de loja) (FOCO)
-- [ ] Criar pedido com itens, preços, desconto
+- [x] Pedidos (frente de loja) (FOCO)
+- [x] Criar pedido com itens, preços, desconto
 - [x] Status: DRAFT, OPEN, CONFIRMED, IN_PRODUCTION, READY, INSTALLED, DELIVERED, CANCELED (schema + constantes)
 - [ ] Timeline/histórico de status (OrderStatusHistory existe)
 - [ ] Observações técnicas (medidas, detalhes)
