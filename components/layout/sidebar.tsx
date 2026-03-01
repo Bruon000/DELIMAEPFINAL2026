@@ -59,6 +59,7 @@ const mainNav: NavItem[] = [
     children: [
       { title: "Visão geral", href: "/estoque" },
       { title: "Materiais", href: "/cadastros/materiais" },
+      { title: "Fornecedores", href: "/cadastros/fornecedores" },
       { title: "Entradas", href: "/estoque/entradas" },
       { title: "Movimentações", href: "/estoque/movimentacoes" },
           { title: "Compras", href: "/compras/pedidos" },
@@ -95,6 +96,7 @@ const bottomNav: NavItem[] = [
       { title: "Clientes", href: "/clientes" },
       { title: "Produtos", href: "/cadastros/produtos" },
       { title: "Materiais", href: "/cadastros/materiais" },
+      { title: "Fornecedores", href: "/cadastros/fornecedores" },
     ],
   },
   { title: "Configurações", href: "/configuracoes", icon: Settings },
@@ -234,4 +236,6 @@ export function Sidebar() {
     </>
   );
 }
+
+
 

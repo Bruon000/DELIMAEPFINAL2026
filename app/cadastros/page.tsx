@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 
 export default function CadastrosPage() {
   const links = [
-    { title: "Clientes", href: "/clientes", desc: "CRUD completo" },
+    
+    { title: "Fornecedores", href: "/cadastros/fornecedores", desc: "CRUD + CNPJ (auto preencher)" },
+{ title: "Clientes", href: "/clientes", desc: "CRUD completo" },
     { title: "Produtos", href: "/cadastros/produtos", desc: "CRUD + BOM por produto" },
     { title: "Materiais", href: "/cadastros/materiais", desc: "CRUD + gera StockItem" },
     { title: "Unidades", href: "/cadastros/unidades", desc: "CRUD de unidades (un, m, kg, l...)" },
@@ -32,5 +34,6 @@ export default function CadastrosPage() {
     </div>
   );
 }
+
 
 
