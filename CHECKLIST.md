@@ -253,6 +253,9 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [ ] Alertas de mínimo (Material.minStock) — lista “abaixo do mínimo”
 - [ ] Histórico por material (extrato do material) — saldo antes/depois (balance) e referências
 
+- [x] RESERVED — ao confirmar pedido, gravar StockLedger por material (referência Order/OP)
+- [x] CONSUMED — ao finalizar produção, gravar StockLedger por material (referência OP)
+
 ### B) Compras / Fornecedores (base)
 - [ ] Cadastro de fornecedores (Supplier) — CRUD
 - [ ] Pedido de compra (PurchaseOrder) — criar/editar, itens, status
@@ -305,3 +308,4 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [ ] Seeds completos (unidades, materiais, categorias, exemplos)
 - [ ] Validações e masks (CPF/CNPJ, moeda, decimal)
 - [ ] Testes mínimos (smoke) e página “Saúde do sistema”
+

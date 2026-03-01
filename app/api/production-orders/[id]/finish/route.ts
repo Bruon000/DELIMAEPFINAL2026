@@ -9,6 +9,8 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   // @ts-expect-error
   const companyId = session.user.companyId as string;
+  // @ts-expect-error
+  const userId = session.user.id as string;
 
   const id = ctx.params.id;
 
@@ -65,14 +67,30 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   await prisma.$transaction(async (tx) => {
     for (const [mid, need] of requiredByMaterial.entries()) {
       const s = stockMap.get(mid)!;
+      const newQty = s.qty - need;
+      const newRes = s.res - need;
+
       await tx.stockItem.update({
         where: { materialId: mid } as any,
         data: {
-          reserved: s.res - need,
-          quantity: s.qty - need,
+          reserved: newRes,
+          quantity: newQty,
           updatedAt: new Date(),
         } as any,
       });
+
+      // ledger CONSUMED: quantity negativa, balance = novo saldo
+      await tx.stockLedger.create({
+        data: {
+          materialId: mid,
+          type: "CONSUMED" as any,
+          quantity: -need,
+          balance: newQty,
+          reference: id, // ProductionOrder.id
+          note: "Consumo ao finalizar produção",
+          createdBy: userId,
+        } as any,
+      } as any);
     }
 
     await tx.productionOrder.update({

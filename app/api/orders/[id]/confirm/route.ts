@@ -42,7 +42,6 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   }
 
   // calcular materiais necessários via BOM
-  // bom.items: [{ materialId, quantity }] e bom.lossPercent
   const requiredByMaterial = new Map<string, number>();
 
   for (const it of order.items) {
@@ -86,7 +85,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   // total do pedido
   const total = order.items.reduce((acc: number, it: any) => acc + sum(it.total), 0);
 
-  // transação: confirma pedido + reserva estoque + cria OP + cria AR
+  // transação: confirma pedido + reserva estoque + cria OP + cria AR + grava ledger
   const result = await prisma.$transaction(async (tx) => {
     // 1) confirmar pedido
     await tx.order.update({
@@ -94,16 +93,28 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
       data: { status: "CONFIRMED" as any, confirmedAt: new Date() } as any,
     });
 
-    // 2) reservar estoque
+    // 2) reservar estoque + ledger RESERVED
     for (const [materialId, need] of requiredByMaterial.entries()) {
       const current = stockMap.get(materialId)!;
       const newReserved = current.res + need;
 
-      // stockItem parece ter unique por materialId (no seu schema)
       await tx.stockItem.update({
         where: { materialId } as any,
         data: { reserved: newReserved, updatedAt: new Date() } as any,
       });
+
+      // balance = quantity (não muda na reserva), quantity do ledger = necessidade reservada
+      await tx.stockLedger.create({
+        data: {
+          materialId,
+          type: "RESERVED" as any,
+          quantity: need,
+          balance: current.qty,
+          reference: orderId,
+          note: "Reserva ao confirmar pedido",
+          createdBy: userId,
+        } as any,
+      } as any);
     }
 
     // 3) criar OP (ProductionOrder)
