@@ -194,7 +194,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Notificações in-app (Notification) base (schema)
 - [ ] Preferências (stub)
 - [ ] Busca global (stub) — barra na topbar existe, falta lógica
-- [ ] Ações rápidas (novo pedido, nova OP, receber pagamento) — botões na topbar, falta rotas
+- [x] Ações rápidas (novo pedido, nova OP, receber pagamento) — botões na topbar, falta rotas
 
 ---
 
