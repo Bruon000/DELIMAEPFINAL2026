@@ -7,10 +7,7 @@ function n(x: any) { return Number(x ?? 0); }
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
-  // @ts-expect-error
   const companyId = session.user.companyId as string;
-  // @ts-expect-error
   const userId = session.user.id as string;
 
   const id = ctx.params.id;
@@ -76,3 +73,4 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   return NextResponse.json({ ok: true, ...result });
 }
+
