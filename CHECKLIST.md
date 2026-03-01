@@ -47,6 +47,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Serviços (instalação, transporte, pintura, etc.) (schema)
 - [x] Categorias/Tags (catálogo) (schema)
 - [ ] Telas de CRUD para todos os cadastros acima
+  - [x] Produtos (CRUD) — tela + API (GET/POST/PATCH/DELETE)
   - [x] Clientes (CRUD) — tela + API (GET/POST/PATCH/DELETE)
 
 ---
