@@ -119,6 +119,7 @@ export default function CompraDetailPage() {
       await qc.invalidateQueries({ queryKey: ["po", id] });
       await qc.invalidateQueries({ queryKey: ["stock-ledger"] });
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      await qc.invalidateQueries({ queryKey: ["materials"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
@@ -129,16 +130,18 @@ export default function CompraDetailPage() {
       setMsg("Pedido marcado como ENVIADO!");
       await qc.invalidateQueries({ queryKey: ["po", id] });
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      await qc.invalidateQueries({ queryKey: ["materials"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
   const cancelMut = useMutation({
-    mutationFn: () => cancelPO(id),
+    mutationFn: async () => { if (!confirm("Cancelar este pedido de compra?")) return; return cancelPO(id); },
     onSuccess: async () => {
       setMsg("Pedido CANCELADO!");
       await qc.invalidateQueries({ queryKey: ["po", id] });
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      await qc.invalidateQueries({ queryKey: ["materials"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
@@ -243,6 +246,7 @@ export default function CompraDetailPage() {
     </div>
   );
 }
+
 
 
 

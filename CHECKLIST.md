@@ -84,7 +84,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Saldo por material (StockItem) (schema)
 - [x] Livro razão de estoque (StockLedger) (schema)
 - [x] Tipos de movimento: RECEIVED, RESERVED, CONSUMED, ADJUSTMENT (schema)
-- [ ] Entrada de compra (RECEIVED) — tela/fluxo
+- [x] Entrada de compra (RECEIVED) — tela/fluxo
 - [x] Reserva automática ao confirmar pedido (RESERVED) usando BOM
 - [x] Baixa ao finalizar produção (CONSUMED)
 - [ ] Ajuste manual (ADJUSTMENT)
@@ -258,13 +258,15 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] CONSUMED — ao finalizar produção, gravar StockLedger por material (referência OP)
 
 ### B) Compras / Fornecedores (base)
-- [ ] Compras (UI) — finalizar fluxo: badge status + ações ENVIAR/CANCELAR + receber só em SENT + confirmações
-- [ ] Compras (UX) — mostrar fornecedor completo no detalhe (doc/tel) + mensagens/toast melhores
-- [ ] Compras (Regras) — travar edição quando status != DRAFT e validar transições (API + UI)
-- [ ] Compras (Extra) — após receber, invalidar materiais e exibir “custos atualizados”- [x] Recebimento de compra → entrada estoque (RECEIVED) + ledger + atualiza custo do material
+- [x] Compras (UI) — finalizar fluxo: badge status + ações ENVIAR/CANCELAR + receber só em SENT + confirmações
+- [x] Compras (UX) — mostrar fornecedor completo no detalhe (doc/tel) + mensagens/toast melhores
+- [x] Compras (Regras) — travar edição quando status != DRAFT e validar transições (API + UI)
+- [x] Compras (Extra) — após receber, invalidar materiais e exibir “custos atualizados”
+- [x] Recebimento de compra → entrada estoque (RECEIVED) + ledger + atualiza custo do material
 - [x] Pedido de compra (PurchaseOrder) — criar/listar/detalhe + itens
 - [ ] Cadastro de fornecedores (Supplier) — CRUD
 - [x] Pedido de compra (PurchaseOrder) — criar/editar, itens, status
+
 - [x] Recebimento de compra → gera entrada (RECEIVED) + StockLedger + atualiza StockItem
 
 ### C) Fiscal / XML / NF-e (stub → completo)
@@ -314,6 +316,11 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [ ] Seeds completos (unidades, materiais, categorias, exemplos)
 - [ ] Validações e masks (CPF/CNPJ, moeda, decimal)
 - [ ] Testes mínimos (smoke) e página “Saúde do sistema”
+
+
+
+
+
 
 
 

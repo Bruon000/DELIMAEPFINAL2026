@@ -22,7 +22,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   if (!poItems.length) return NextResponse.json({ error: "po_no_items" }, { status: 400 });
 
   const st = String(po.status);
-  if (st === "RECEIVED" || st === "CANCELED") return NextResponse.json({ error: "invalid_status", status: po.status }, { status: 400 });
+  if (st !== "SENT") return NextResponse.json({ error: "invalid_status", status: po.status }, { status: 400 });
 
   const result = await prisma.$transaction(async (tx) => {
     for (const it of poItems) {
@@ -72,4 +72,5 @@ const stock = await tx.stockItem.upsert({
 
   return NextResponse.json({ ok: true, ...result });
 }
+
 

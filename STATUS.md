@@ -6,14 +6,13 @@
 
 ## Onde estamos (última atualização)
 
-- **Última verificação:** 01/03/2026 — Atualização de teste: se você está vendo esta linha no GitHub, a marcação/atualização no Git está funcionando. ✅
+- **Última verificação:** 02/03/2026 — Status atualizado (Compras/PO como próximo). ✅
 - **Fase atual:** Esqueleto inicial entregue. Backend (Prisma, APIs), layout Olist (sidebar/topbar), dashboard com cards e checklist completo no repositório.
 - **Próximos passos sugeridos (em ordem):**
-  1. Produção: lista de OPs + detalhe + atualizar status + baixa de materiais (CONSUMED)
-  2. Caixa: receber pagamento (vincular AR + registrar no caixa)
-  3. Cadastros: telas de CRUD (começar por Clientes)
-  4. Busca global + ações rápidas (topbar)
-  5. Logs de auditoria + proteções básicas (CORS/Helmet)
+  1. Compras: polir PO (badge status, enviar/cancelar, receber so em SENT, travar edicao quando status != DRAFT, confirmacoes, mensagens melhores, invalidar materials apos receber)
+  2. Producao: detalhe da OP (pedido, itens, anexos, materiais calculados)
+  3. Caixa/Financeiro: telas de caixa + extrato
+  4. Auditoria/Security: AuditLog em acoes criticas
 ---
 
 ## Como saber o que já foi feito
@@ -58,4 +57,5 @@ Assim, na próxima sessão (ou em outra máquina/IA), o contexto continua no Git
 - **Estrutura:** `app/` (rotas e páginas), `components/` (layout + ui + modules), `lib/` (prisma, utils, constants), `prisma/schema.prisma` (modelo completo).
 - **Auth:** Implementado com NextAuth (Credentials) + proteção de rotas (middleware). RBAC básico: /admin apenas ADMIN.
 - **Fluxo principal a implementar:** Pedido → Confirmar → OP + reserva estoque + AR → Produção → Consumir estoque → Caixa (receber pagamento) → Dashboard reflete.
+
 
