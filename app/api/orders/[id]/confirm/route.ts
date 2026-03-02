@@ -119,11 +119,9 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     // 3) criar OP (ProductionOrder)
     const po = await tx.productionOrder.create({
       data: {
-        id: `po_${Date.now()}`,
         companyId,
         orderId,
-        status: "PENDING" as any,
-        createdById: userId,
+        status: "QUEUED" as any
       } as any,
       select: { id: true },
     } as any);
@@ -131,11 +129,10 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     // 4) criar AR (AccountsReceivable) mínimo 1 parcela
     const ar = await tx.accountsReceivable.create({
       data: {
-        id: `ar_${Date.now()}`,
         companyId,
         orderId,
         amount: total,
-        status: "OPEN" as any,
+        status: "PENDING" as any,
         dueDate: new Date(),
       } as any,
       select: { id: true },
@@ -146,3 +143,4 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   return NextResponse.json({ ok: true, ...result });
 }
+
