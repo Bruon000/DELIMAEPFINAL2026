@@ -7,6 +7,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+
+function statusBadge(st: string) {
+  const s = String(st || "");
+  const base = "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold";
+  if (s === "RECEIVED") return <span className={`${base} bg-emerald-100 text-emerald-800`}>RECEIVED</span>;
+  if (s === "SENT") return <span className={`${base} bg-blue-100 text-blue-800`}>SENT</span>;
+  if (s === "CANCELED") return <span className={`${base} bg-red-100 text-red-800`}>CANCELED</span>;
+  return <span className={`${base} bg-zinc-100 text-zinc-800`}>DRAFT</span>;
+}
+
+async function markSent(poId: string) {
+  const res = await fetch(`/api/purchase-orders/${poId}/send`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao marcar como enviado");
+  return data;
+}
+
+async function cancelPO(poId: string) {
+  const res = await fetch(`/api/purchase-orders/${poId}/cancel`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao cancelar");
+  return data;
+}
+
 async function fetchPO(id: string) {
   const res = await fetch(`/api/purchase-orders/${id}`);
   if (!res.ok) throw new Error("Erro ao carregar pedido de compra");
@@ -84,10 +108,37 @@ export default function CompraDetailPage() {
 
   const recMut = useMutation({
     mutationFn: () => receive(id),
-    onSuccess: async () => {
-      setMsg("Compra recebida! Estoque atualizado e ledger gravado.");
+    onSuccess: async (d: any) => {
+      const updatedCosts = (d as any)?.updatedCosts ?? [];
+      if (updatedCosts.length) {
+        setMsg(`Compra recebida! Estoque atualizado. Custos atualizados em ${updatedCosts.length} material(is).`);
+      } else {
+        setMsg("Compra recebida! Estoque atualizado e ledger gravado.");
+      }
+      await qc.invalidateQueries({ queryKey: ["materials"] });
       await qc.invalidateQueries({ queryKey: ["po", id] });
       await qc.invalidateQueries({ queryKey: ["stock-ledger"] });
+      await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
+
+  const sendMut = useMutation({
+    mutationFn: () => markSent(id),
+    onSuccess: async () => {
+      setMsg("Pedido marcado como ENVIADO!");
+      await qc.invalidateQueries({ queryKey: ["po", id] });
+      await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: () => cancelPO(id),
+    onSuccess: async () => {
+      setMsg("Pedido CANCELADO!");
+      await qc.invalidateQueries({ queryKey: ["po", id] });
+      await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
@@ -106,15 +157,48 @@ export default function CompraDetailPage() {
       <Card>
         <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
         <CardContent className="space-y-1">
-          <div><b>Status:</b> {po.status}</div>
-          <div><b>Fornecedor:</b> {po.supplier?.name ?? "-"}</div>
+          <div className="flex items-center gap-2"><b>Status:</b> {statusBadge(po.status)}</div>
+          <div>
+  <b>Fornecedor:</b> {po.supplier?.name ?? "-"}
+  {po.supplier?.document ? <span className="text-sm text-muted-foreground"> · Doc: {po.supplier.document}</span> : null}
+  {po.supplier?.phone ? <span className="text-sm text-muted-foreground"> · Tel: {po.supplier.phone}</span> : null}
+</div>
           <div><b>Total:</b> R$ {Number(total).toFixed(2)}</div>
 
           <div className="pt-2 flex gap-2">
-            <Button disabled={recMut.isPending || !items.length || status === "RECEIVED" || status === "CANCELED"} onClick={() => recMut.mutate()}>
-              {recMut.isPending ? "Recebendo..." : "Receber compra (entrada estoque)"}
-            </Button>
-          </div>
+            
+<Button
+  variant="outline"
+  disabled={sendMut.isPending || !items.length || status !== "DRAFT"}
+  onClick={() => {
+    if (!window.confirm("Marcar este pedido como ENVIADO?")) return;
+    sendMut.mutate();
+  }}
+>
+  {sendMut.isPending ? "Enviando..." : "Marcar como Enviado"}
+</Button>
+
+<Button
+  variant="destructive"
+  disabled={cancelMut.isPending || (status !== "DRAFT" && status !== "SENT")}
+  onClick={() => {
+    if (!window.confirm("Cancelar este pedido?")) return;
+    cancelMut.mutate();
+  }}
+>
+  {cancelMut.isPending ? "Cancelando..." : "Cancelar"}
+</Button>
+
+<Button
+  disabled={recMut.isPending || !items.length || status !== "SENT"}
+  onClick={() => {
+    if (!window.confirm("Confirmar RECEBIMENTO? Isso vai dar entrada no estoque e atualizar custos.")) return;
+    recMut.mutate();
+  }}
+>
+  {recMut.isPending ? "Recebendo..." : "Receber compra (entrada estoque)"}
+</Button>
+</div>
         </CardContent>
       </Card>
 
@@ -159,3 +243,6 @@ export default function CompraDetailPage() {
     </div>
   );
 }
+
+
+
