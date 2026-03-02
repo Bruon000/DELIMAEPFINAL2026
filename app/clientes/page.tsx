@@ -40,7 +40,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 async function fetchClients() {
-  const res = await fetch("/api/clients", { credentials: "include" });
+  const res = await fetch("/api/clients");
   if (!res.ok) throw new Error("Erro ao carregar clientes");
   return res.json();
 }
@@ -49,7 +49,6 @@ async function createClient(payload: any) {
   const res = await fetch("/api/clients", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    credentials: "include",
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
@@ -61,7 +60,6 @@ async function updateClient(id: string, payload: any) {
   const res = await fetch(`/api/clients/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    credentials: "include",
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
@@ -70,7 +68,7 @@ async function updateClient(id: string, payload: any) {
 }
 
 async function deleteClient(id: string) {
-  const res = await fetch(`/api/clients/${id}`, { method: "DELETE", credentials: "include" });
+  const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "Erro ao remover");
   return data;
@@ -79,7 +77,7 @@ async function deleteClient(id: string) {
 async function lookupCnpj(cnpj: string) {
   const q = onlyDigits(cnpj);
   if (q.length !== 14) throw new Error("CNPJ inválido (precisa ter 14 dígitos)");
-  const res = await fetch(`/api/br/cnpj?q=${q}`, { credentials: "include" });
+  const res = await fetch(`/api/br/cnpj?q=${q}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "Falha no lookup");
   return data.data;
@@ -91,44 +89,58 @@ export default function ClientesPage() {
 
   const clients: Client[] = data?.clients ?? data?.items ?? data?.data ?? [];
 
-  const [form, setForm] = React.useState<any>({
-  docType: "CPF",
-  name: "",
-  tradeName: "",
-  document: "",
-  ie: "",
-  im: "",
-  email: "",
-  phone: "",
-  addressStreet: "",
-  addressNumber: "",
-  addressDistrict: "",
-  addressCity: "",
-  addressState: "",
-  addressZip: "",
-});const [editing, setEditing] = React.useState<Client | null>(null);
+  const emptyForm = {
+    docType: "CPF" as "CPF" | "CNPJ",
+    name: "",
+    tradeName: "",
+    document: "",
+    ie: "",
+    im: "",
+    email: "",
+    phone: "",
+    addressStreet: "",
+    addressNumber: "",
+    addressDistrict: "",
+    addressCity: "",
+    addressState: "",
+    addressZip: "",
+  };
+
+  const [form, setForm] = React.useState<any>(emptyForm);
+  const [editing, setEditing] = React.useState<any>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  const current = (editing as any) ?? form;
-const docType = String(current?.docType ?? "CPF");const createMut = useMutation({
+  const current = editing ?? form;
+  const isCnpj = String(current?.docType ?? "CPF") === "CNPJ";
+
+  const setVal = (key: string, val: any) => {
+    if (editing) setEditing({ ...(editing as any), [key]: val });
+    else setForm({ ...form, [key]: val });
+  };
+
+  const onChangeDocType = (t: "CPF" | "CNPJ") => {
+    // ao trocar para CPF, limpamos os campos "de empresa" pra não poluir
+    const patch: any = { docType: t };
+    if (t === "CPF") {
+      patch.tradeName = "";
+      patch.ie = "";
+      patch.im = "";
+      patch.addressStreet = "";
+      patch.addressNumber = "";
+      patch.addressDistrict = "";
+      patch.addressCity = "";
+      patch.addressState = "";
+      patch.addressZip = "";
+    }
+    if (editing) setEditing({ ...(editing as any), ...patch });
+    else setForm({ ...form, ...patch });
+  };
+
+  const createMut = useMutation({
     mutationFn: createClient,
     onSuccess: async () => {
       setMsg("Cliente criado!");
-      setForm({
-        name: "",
-        tradeName: "",
-        document: "",
-        ie: "",
-        im: "",
-        email: "",
-        phone: "",
-        addressStreet: "",
-        addressNumber: "",
-        addressDistrict: "",
-        addressCity: "",
-        addressState: "",
-        addressZip: "",
-      });
+      setForm(emptyForm);
       await qc.invalidateQueries({ queryKey: ["clients"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
@@ -156,6 +168,12 @@ const docType = String(current?.docType ?? "CPF");const createMut = useMutation(
   const cnpjMut = useMutation({
     mutationFn: (cnpj: string) => lookupCnpj(cnpj),
     onSuccess: (d: any) => {
+      // só preenche automático se estiver em CNPJ
+      if (!isCnpj) {
+        setMsg("Troque para CNPJ para usar o preenchimento automático.");
+        return;
+      }
+
       const next: any = {
         document: d?.cnpj ?? current.document ?? "",
         name: d?.razaoSocial ?? current.name ?? "",
@@ -178,9 +196,24 @@ const docType = String(current?.docType ?? "CPF");const createMut = useMutation(
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const setVal = (key: string, val: any) => {
-    if (editing) setEditing({ ...(editing as any), [key]: val });
-    else setForm({ ...form, [key]: val });
+  const payloadForSave = (obj: any) => {
+    // sempre manda docType só pro front; API pode ignorar
+    const p: any = { ...obj };
+    delete p.docType;
+
+    // se for CPF, manda só o essencial (evita salvar lixo em campos de empresa)
+    if (String(obj?.docType ?? "CPF") === "CPF") {
+      p.tradeName = "";
+      p.ie = "";
+      p.im = "";
+      p.addressStreet = "";
+      p.addressNumber = "";
+      p.addressDistrict = "";
+      p.addressCity = "";
+      p.addressState = "";
+      p.addressZip = "";
+    }
+    return p;
   };
 
   return (
@@ -188,65 +221,74 @@ const docType = String(current?.docType ?? "CPF");const createMut = useMutation(
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Clientes</h1>
         <Button asChild variant="outline">
-          <Link href="/dashboard">Voltar</Link>
+          <Link href="/cadastros">Voltar</Link>
         </Button>
       </div>
 
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
 
       <Card>
-        <CardHeader>
-          <CardTitle>{editing ? "Editar cliente" : "Novo cliente"}</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>{editing ? "Editar cliente" : "Novo cliente"}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">            <Field label="Documento" hint={docType === "CNPJ" ? "CNPJ: digite e clique em “Buscar” para preencher automático (BrasilAPI)" : "CPF: preencha manualmente"}>
-              <div className="flex gap-2">
-                <select
-                  className="border rounded px-2 py-2"
-                  value={docType}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setVal("docType", v);
-                    setVal("document", "");
-                    setMsg(null);
-                  }}
-                >
-                  <option value="CPF">CPF</option>
-                  <option value="CNPJ">CNPJ</option>
-                </select>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={String(current.docType ?? "CPF") === "CPF" ? "default" : "outline"}
+              onClick={() => onChangeDocType("CPF")}
+            >
+              CPF
+            </Button>
+            <Button
+              type="button"
+              variant={String(current.docType ?? "CPF") === "CNPJ" ? "default" : "outline"}
+              onClick={() => onChangeDocType("CNPJ")}
+            >
+              CNPJ
+            </Button>
+          </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field
+              label={isCnpj ? "CNPJ" : "CPF"}
+              hint={isCnpj ? 'Digite e clique em "Buscar CNPJ" para preencher automático (BrasilAPI)' : "Apenas CPF + dados básicos"}
+            >
+              <div className="flex gap-2">
                 <Input
-                  placeholder={docType === "CNPJ" ? "00.000.000/0000-00" : "000.000.000-00"}
+                  placeholder={isCnpj ? "00.000.000/0000-00" : "000.000.000-00"}
                   value={current.document ?? ""}
                   onChange={(e) => setVal("document", e.target.value)}
                 />
-
-                {docType === "CNPJ" ? (
+                {isCnpj ? (
                   <Button
                     variant="outline"
                     onClick={() => cnpjMut.mutate(String(current.document ?? ""))}
                     disabled={cnpjMut.isPending || onlyDigits(String(current.document ?? "")).length !== 14}
                   >
-                    {cnpjMut.isPending ? "Buscando..." : "Buscar"}
+                    {cnpjMut.isPending ? "Buscando..." : "Buscar CNPJ"}
                   </Button>
                 ) : null}
               </div>
             </Field>
-            <Field label="Razão social / Nome *" hint="Razão social (CNPJ) ou nome do cliente">
+
+            <Field label={isCnpj ? "Razão social / Nome *" : "Nome *"} hint={isCnpj ? "Razão social (CNPJ) ou nome do cliente" : "Nome do cliente"}>
               <Input placeholder="Nome" value={current.name ?? ""} onChange={(e) => setVal("name", e.target.value)} />
             </Field>
 
-            <Field label="Nome fantasia" hint="Opcional">
-              <Input placeholder="Nome fantasia" value={current.tradeName ?? ""} onChange={(e) => setVal("tradeName", e.target.value)} />
-            </Field>
+            {isCnpj ? (
+              <>
+                <Field label="Nome fantasia" hint="Opcional">
+                  <Input placeholder="Nome fantasia" value={current.tradeName ?? ""} onChange={(e) => setVal("tradeName", e.target.value)} />
+                </Field>
 
-            <Field label="IE / Inscrição Estadual" hint="Pode ficar em branco e preencher depois">
-              <Input placeholder="IE (opcional)" value={current.ie ?? ""} onChange={(e) => setVal("ie", e.target.value)} />
-            </Field>
+                <Field label="IE / Inscrição Estadual" hint="Pode ficar em branco e preencher depois">
+                  <Input placeholder="IE (opcional)" value={current.ie ?? ""} onChange={(e) => setVal("ie", e.target.value)} />
+                </Field>
 
-            <Field label="IM / Inscrição Municipal" hint="Pode ficar em branco e preencher depois">
-              <Input placeholder="IM (opcional)" value={current.im ?? ""} onChange={(e) => setVal("im", e.target.value)} />
-            </Field>
+                <Field label="IM / Inscrição Municipal" hint="Pode ficar em branco e preencher depois">
+                  <Input placeholder="IM (opcional)" value={current.im ?? ""} onChange={(e) => setVal("im", e.target.value)} />
+                </Field>
+              </>
+            ) : null}
 
             <Field label="Email" hint="Opcional">
               <Input placeholder="email@cliente.com" value={current.email ?? ""} onChange={(e) => setVal("email", e.target.value)} />
@@ -256,47 +298,52 @@ const docType = String(current?.docType ?? "CPF");const createMut = useMutation(
               <Input placeholder="(xx) xxxxx-xxxx" value={current.phone ?? ""} onChange={(e) => setVal("phone", e.target.value)} />
             </Field>
 
-            <Field label="Logradouro" hint="Rua/Av">
-              <Input placeholder="Rua/Av" value={current.addressStreet ?? ""} onChange={(e) => setVal("addressStreet", e.target.value)} />
-            </Field>
+            {isCnpj ? (
+              <>
+                <Field label="Logradouro" hint="Rua/Av">
+                  <Input placeholder="Rua/Av" value={current.addressStreet ?? ""} onChange={(e) => setVal("addressStreet", e.target.value)} />
+                </Field>
 
-            <Field label="Número" hint="Opcional">
-              <Input placeholder="Número" value={current.addressNumber ?? ""} onChange={(e) => setVal("addressNumber", e.target.value)} />
-            </Field>
+                <Field label="Número" hint="Opcional">
+                  <Input placeholder="Número" value={current.addressNumber ?? ""} onChange={(e) => setVal("addressNumber", e.target.value)} />
+                </Field>
 
-            <Field label="Bairro" hint="Opcional">
-              <Input placeholder="Bairro" value={current.addressDistrict ?? ""} onChange={(e) => setVal("addressDistrict", e.target.value)} />
-            </Field>
+                <Field label="Bairro" hint="Opcional">
+                  <Input placeholder="Bairro" value={current.addressDistrict ?? ""} onChange={(e) => setVal("addressDistrict", e.target.value)} />
+                </Field>
 
-            <Field label="Cidade" hint="Opcional">
-              <Input placeholder="Cidade" value={current.addressCity ?? ""} onChange={(e) => setVal("addressCity", e.target.value)} />
-            </Field>
+                <Field label="Cidade" hint="Opcional">
+                  <Input placeholder="Cidade" value={current.addressCity ?? ""} onChange={(e) => setVal("addressCity", e.target.value)} />
+                </Field>
 
-            <Field label="UF" hint="Ex.: SP, RJ, CE">
-              <Input placeholder="UF" value={current.addressState ?? ""} onChange={(e) => setVal("addressState", e.target.value)} />
-            </Field>
+                <Field label="UF" hint="Ex.: SP, RJ, CE">
+                  <Input placeholder="UF" value={current.addressState ?? ""} onChange={(e) => setVal("addressState", e.target.value)} />
+                </Field>
 
-            <Field label="CEP" hint="Ex.: 00000-000">
-              <Input placeholder="CEP" value={current.addressZip ?? ""} onChange={(e) => setVal("addressZip", e.target.value)} />
-            </Field>
+                <Field label="CEP" hint="Ex.: 00000-000">
+                  <Input placeholder="CEP" value={current.addressZip ?? ""} onChange={(e) => setVal("addressZip", e.target.value)} />
+                </Field>
+              </>
+            ) : null}
           </div>
 
           <div className="flex gap-2">
             {!editing ? (
-              <Button onClick={() => createMut.mutate(form)} disabled={createMut.isPending || !String(form.name ?? "").trim()}>
+              <Button
+                onClick={() => createMut.mutate(payloadForSave(form))}
+                disabled={createMut.isPending || !String(form.name ?? "").trim()}
+              >
                 {createMut.isPending ? "Salvando..." : "Criar"}
               </Button>
             ) : (
               <>
                 <Button
-                  onClick={() => updateMut.mutate({ id: editing.id, payload: editing })}
+                  onClick={() => updateMut.mutate({ id: editing.id, payload: payloadForSave(editing) })}
                   disabled={updateMut.isPending || !String(editing.name ?? "").trim()}
                 >
                   {updateMut.isPending ? "Salvando..." : "Salvar"}
                 </Button>
-                <Button variant="outline" onClick={() => setEditing(null)}>
-                  Cancelar
-                </Button>
+                <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
               </>
             )}
           </div>
@@ -319,7 +366,7 @@ const docType = String(current?.docType ?? "CPF");const createMut = useMutation(
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditing(c)}>Editar</Button>
+                <Button variant="outline" size="sm" onClick={() => setEditing({ ...c, docType: (onlyDigits(String(c.document ?? "")).length === 14 ? "CNPJ" : "CPF") })}>Editar</Button>
                 <Button variant="destructive" size="sm" onClick={() => delMut.mutate(c.id)} disabled={delMut.isPending}>Remover</Button>
               </div>
             </div>
@@ -330,5 +377,3 @@ const docType = String(current?.docType ?? "CPF");const createMut = useMutation(
     </div>
   );
 }
-
-
