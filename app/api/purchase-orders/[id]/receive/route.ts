@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-
+import { writeAuditLog } from "@/lib/audit";
 function n(x: any) { return Number(x ?? 0); }
 
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!session?.user)return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const userId = session.user.id as string;
   const companyId = session.user.companyId as string;
 
@@ -17,12 +17,12 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     include: { items: true },
   } as any);
 
-  if (!po) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!po)return NextResponse.json({ error: "not_found" }, { status: 404 });
   const poItems = (po as any).items ?? [];
-  if (!poItems.length) return NextResponse.json({ error: "po_no_items" }, { status: 400 });
+  if (!poItems.length)return NextResponse.json({ error: "po_no_items" }, { status: 400 });
 
   const st = String(po.status);
-  if (st !== "SENT") return NextResponse.json({ error: "invalid_status", status: po.status }, { status: 400 });
+  if (st !== "SENT")return NextResponse.json({ error: "invalid_status", status: po.status }, { status: 400 });
 
   const result = await prisma.$transaction(async (tx) => {
     for (const it of poItems) {
@@ -70,7 +70,20 @@ const stock = await tx.stockItem.upsert({
     return { purchaseOrderId: updated.id, status: updated.status, receivedAt: updated.receivedAt };
   });
 
-  return NextResponse.json({ ok: true, ...result });
+await writeAuditLog({
+  companyId,
+  userId,
+  action: "PO_RECEIVED",
+  entity: "PURCHASE_ORDER",
+  entityId: id,
+  payload: { status: "RECEIVED" },
+  ip: req.headers.get("x-forwarded-for"),
+  userAgent: req.headers.get("user-agent"),
+});
+return NextResponse.json({ ok: true, ...result });
 }
+
+
+
 
 

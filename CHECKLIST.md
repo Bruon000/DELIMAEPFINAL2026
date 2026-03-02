@@ -1,4 +1,48 @@
-# Checklist ERP Serralheria
+
+## Status atual (ATUALIZE SEMPRE)
+- Data: 2026-03-02 17:51:39
+- Ambiente: Windows / Next.js 14 / Prisma / Postgres (docker)
+- Login seed: admin@demo.com / admin123
+- DB (DEV): DATABASE_URL em .env apontando para delima_epfinal2026
+- Observação: para testes via PowerShell use curl.exe (não Invoke-WebRequest) + cookies.txt
+
+## ✅ O que está funcionando (confirmado via testes)
+### Produção (OP)
+- [x] Detalhe da OP com pedido + itens + materiais calculados
+- [x] Ações: iniciar OP (start) e finalizar OP (finish)
+- [x] Offline/outbox na tela da OP: enfileira start/finish e tenta flush ao voltar online
+
+### Comercial → Pedido → Produção/Financeiro
+- [x] Confirmar pedido: valida estoque (BOM), reserva (RESERVED ledger), muda status para CONFIRMED, cria OP (QUEUED) e cria AccountsReceivable (PENDING)
+
+### Compras
+- [x] Lista de compras com padrão ERP (PageHeader + filtros + DataTable + status badge)
+- [x] Detalhe do Pedido de Compra (PO) com padrão ERP industrial (Resumo/Total/Ações + itens)
+- [x] Fluxo industrial do PO:
+  - [x] Criar PO (POST /api/purchase-orders)
+  - [x] Adicionar item (POST /api/purchase-orders/:id/items)
+  - [x] Marcar como ENVIADO (POST /api/purchase-orders/:id/send)
+  - [x] Receber compra (POST /api/purchase-orders/:id/receive) -> entrada estoque + ledger
+  - [x] Cancelar (POST /api/purchase-orders/:id/cancel)
+
+### Estoque / Ledger
+- [x] Ledger grava RECEIVED no recebimento de PO (reference PO:...)
+- [x] Bootstrap demo cria materiais + estoque inicial + produtos + cliente + fornecedor + pedido + PO (scripts/bootstrap-demo.js)
+
+### Auditoria
+- [x] lib/audit.ts (writeAuditLog) não derruba operação
+- [x] GET /api/audit-logs?entity=...&entityId=... (consulta trilha)
+- [x] Audit no PO: PO_SENT e PO_RECEIVED gravando payload + userAgent/ip
+
+### Cadastros/API suporte a testes
+- [x] GET/POST /api/suppliers (necessário para Compras)
+
+## 🟡 Pendências / Melhorias (pra não esquecer)
+- [ ] Padronizar “ERP UI” no resto das telas (Pedidos, Produção, Estoque, Financeiro)
+- [ ] Criar tela/aba de “Audit Trail” no detalhe do PO (consumir /api/audit-logs)
+- [ ] Melhorar o runner de testes via PowerShell (script único end-to-end)
+- [ ] Revisar seed/bootstrap para incluir BOM nos produtos (para confirmar pedido reservar materiais de verdade)
+- [ ] Revisar outbox: tratar falhas/retry/backoff e identificar ações duplicadas (idempotência)
 
 Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quando concluir cada item.
 
@@ -316,6 +360,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [ ] Seeds completos (unidades, materiais, categorias, exemplos)
 - [ ] Validações e masks (CPF/CNPJ, moeda, decimal)
 - [ ] Testes mínimos (smoke) e página “Saúde do sistema”
+
 
 
 
