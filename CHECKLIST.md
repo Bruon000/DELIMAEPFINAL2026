@@ -48,7 +48,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 **Status atual:** esqueleto inicial entregue (schema Prisma, layout Olist, dashboard com cards, Docker, seed, scripts). Itens marcados com `[x]` já foram implementados nessa base.
 
-**Última atualização (verificação):** 01/03/2026 — Checklist conferido; esta linha foi adicionada para você ver no GitHub que a marcação está funcionando. ✅
+**Última atualização (verificação):** 02/03/2026 — Checklist conferido; esta linha foi adicionada para você ver no GitHub que a marcação está funcionando. ✅
 
 - [x] **Teste de marcação (01/03/2026):** este item foi marcado de propósito para você conferir no GitHub se o `[x]` aparece. Se aparecer, está tudo certo.
 
@@ -274,7 +274,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Produção atualizar status e finalizar OP
 - [ ] Baixar/consumir materiais do estoque
 - [x] Gerar AR e marcar como pago no Caixa
-- [ ] Dashboard refletir os números
+- [x] Dashboard refletir os números
 
 ---
 
