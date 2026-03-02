@@ -305,7 +305,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [ ] Compras (UI) — finalizar fluxo: badge status + ações ENVIAR/CANCELAR + receber só em SENT + confirmações
 - [ ] Compras (UX) — mostrar fornecedor completo no detalhe (doc/tel) + mensagens/toast melhores
 - [ ] Compras (Regras) — travar edição quando status != DRAFT e validar transições (API + UI)
-- [x] Compras (Extra) — após receber, invalidar materiais e exibir “custos atualizados”
+- [ ] Compras (Extra) — após receber, invalidar materiais e exibir “custos atualizados”
 - [x] Recebimento de compra → entrada estoque (RECEIVED) + ledger + atualiza custo do material
 - [x] Pedido de compra (PurchaseOrder) — listar OK via curl; criar/detalhe/itens: a confirmar
 - [ ] Cadastro de fornecedores (Supplier) — CRUD
