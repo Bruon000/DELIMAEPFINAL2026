@@ -35,7 +35,7 @@
 - [x] Audit no PO: PO_SENT e PO_RECEIVED gravando payload + userAgent/ip
 
 ### Cadastros/API suporte a testes
-- [x] GET/POST /api/suppliers (necessário para Compras)
+- [x] GET /api/suppliers OK via curl (POST a confirmar)
 
 ## 🟡 Pendências / Melhorias (pra não esquecer)
 - [ ] Padronizar “ERP UI” no resto das telas (Pedidos, Produção, Estoque, Financeiro)
@@ -302,12 +302,12 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] CONSUMED — ao finalizar produção, gravar StockLedger por material (referência OP)
 
 ### B) Compras / Fornecedores (base)
-- [x] Compras (UI) — finalizar fluxo: badge status + ações ENVIAR/CANCELAR + receber só em SENT + confirmações
-- [x] Compras (UX) — mostrar fornecedor completo no detalhe (doc/tel) + mensagens/toast melhores
-- [x] Compras (Regras) — travar edição quando status != DRAFT e validar transições (API + UI)
+- [ ] Compras (UI) — finalizar fluxo: badge status + ações ENVIAR/CANCELAR + receber só em SENT + confirmações
+- [ ] Compras (UX) — mostrar fornecedor completo no detalhe (doc/tel) + mensagens/toast melhores
+- [ ] Compras (Regras) — travar edição quando status != DRAFT e validar transições (API + UI)
 - [x] Compras (Extra) — após receber, invalidar materiais e exibir “custos atualizados”
 - [x] Recebimento de compra → entrada estoque (RECEIVED) + ledger + atualiza custo do material
-- [x] Pedido de compra (PurchaseOrder) — criar/listar/detalhe + itens
+- [x] Pedido de compra (PurchaseOrder) — listar OK via curl; criar/detalhe/itens: a confirmar
 - [ ] Cadastro de fornecedores (Supplier) — CRUD
 - [x] Pedido de compra (PurchaseOrder) — criar/editar, itens, status
 
