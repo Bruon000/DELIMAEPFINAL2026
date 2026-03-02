@@ -266,7 +266,9 @@ model BOMItem {
   materialId String
   material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
   quantity   Decimal  @db.Decimal(15, 4)
-  createdAt  DateTime @default(now())
+  
+  lossPercent Decimal? @db.Decimal(5, 2) // % perda por material (corte/sobra)
+createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@unique([bomId, materialId])

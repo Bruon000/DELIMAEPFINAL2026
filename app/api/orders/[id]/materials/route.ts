@@ -32,11 +32,12 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
     const bom = (it.product as any)?.bom;
     if (!bom?.items?.length) continue;
 
-    const loss = n(bom.lossPercent) / 100;
+    const lossBom = n(bom.lossPercent) / 100;
 
     for (const bi of bom.items) {
       const base = n(bi.quantity) * qtyProduct;
-      const need = base * (1 + loss);
+      const lossItem = n((bi as any).lossPercent) / 100;
+const need = base * (1 + lossBom) * (1 + lossItem);
       required.set(bi.materialId, (required.get(bi.materialId) ?? 0) + need);
     }
   }

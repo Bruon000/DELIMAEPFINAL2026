@@ -48,11 +48,12 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     const bom = (it.product as any)?.bom;
     if (!bom?.items?.length) continue;
 
-    const loss = sum(bom.lossPercent) / 100;
+    const lossBom = sum(bom.lossPercent) / 100;
 
     for (const bi of bom.items) {
       const base = sum(bi.quantity) * qtyProduct;
-      const need = base * (1 + loss);
+      const lossItem = sum((bi as any).lossPercent) / 100;
+const need = base * (1 + lossBom) * (1 + lossItem);
       requiredByMaterial.set(bi.materialId, (requiredByMaterial.get(bi.materialId) ?? 0) + need);
     }
   }
