@@ -41,7 +41,7 @@
 - [ ] Padronizar “ERP UI” no resto das telas (Pedidos, Produção, Estoque, Financeiro)
 - [ ] Criar tela/aba de “Audit Trail” no detalhe do PO (consumir /api/audit-logs)
 - [x] Melhorar o runner de testes via PowerShell (script único end-to-end)
-- [ ] Revisar seed/bootstrap para incluir BOM nos produtos (para confirmar pedido reservar materiais de verdade)
+- [x] Revisar seed/bootstrap para incluir BOM nos produtos (para confirmar pedido reservar materiais de verdade)
 - [ ] Revisar outbox: tratar falhas/retry/backoff e identificar ações duplicadas (idempotência)
 
 Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quando concluir cada item.
