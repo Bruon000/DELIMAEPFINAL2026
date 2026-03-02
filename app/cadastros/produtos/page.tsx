@@ -1,224 +1,332 @@
-"use client";
+param(
+  [string]$Base = "http://localhost:3001",
+  [string]$Email = "admin@demo.com",
+  [string]$Password = "admin123",
+  [string]$Cookies = "cookies.txt"
+)
 
-import * as React from "react";
-import Link from "next/link";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+$ErrorActionPreference = "Stop"
 
-type Product = {
-  id: string;
-  name: string;
-  code?: string | null;
-  salePrice?: number | null;
-  costPrice?: number | null;
-  type?: string | null;
-  isActive: boolean;
-};
+function CurlJson([string]$Method, [string]$Url, $BodyObj = $null) {
+  $tmp = Join-Path $env:TEMP ("curl_body_" + [guid]::NewGuid().ToString("N") + ".txt")
 
-async function fetchProducts(): Promise<Product[]> {
-  const res = await fetch("/api/products");
-  if (!res.ok) throw new Error("Erro ao carregar produtos");
-  const data = await res.json();
-  return data.products ?? [];
+  $args = @("-s", "-b", $Cookies, "-c", $Cookies, "-X", $Method, "-o", $tmp, "-w", "%{http_code}", $Url)
+  if ($BodyObj -ne $null) {
+    $json = ($BodyObj | ConvertTo-Json -Depth 20 -Compress)
+    $args = @("-s", "-b", $Cookies, "-c", $Cookies, "-X", $Method, "-H", "Content-Type: application/json", "--data", $json, "-o", $tmp, "-w", "%{http_code}", $Url)
+  }
+
+  $code = (& curl.exe @args) -join ""
+  $body = ""
+  if (Test-Path $tmp) { $body = Get-Content $tmp -Raw }
+  Remove-Item $tmp -ErrorAction SilentlyContinue
+
+  if ($code -notmatch '^\d{3}
+function Login() {
+  Remove-Item $Cookies -ErrorAction SilentlyContinue
+
+  $csrfJson = curl.exe -s -c $Cookies "$Base/api/auth/csrf"
+  $csrf = ($csrfJson | ConvertFrom-Json).csrfToken
+  if (-not $csrf) { throw "CSRF vazio" }
+
+  curl.exe -s -L `
+    -b $Cookies -c $Cookies `
+    -H "Content-Type: application/x-www-form-urlencoded" `
+    --data "csrfToken=$([uri]::EscapeDataString($csrf))&email=$([uri]::EscapeDataString($Email))&password=$([uri]::EscapeDataString($Password))" `
+    "$Base/api/auth/callback/credentials" | Out-Null
+
+  $session = (curl.exe -s -b $Cookies "$Base/api/auth/session" | ConvertFrom-Json)
+  if (-not $session.user.email) { throw "Sessão inválida" }
+  Write-Host "OK: login user=$($session.user.email) role=$($session.user.role)"
 }
 
-async function createProduct(payload: any) {
-  const res = await fetch("/api/products", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao criar");
-  return data.product;
+Login
+
+# 1) pegar supplier
+$sup = (curl.exe -s -b $Cookies "$Base/api/suppliers" | ConvertFrom-Json)
+$supplierId = $sup.suppliers[0].id
+if (-not $supplierId) { throw "Nenhum supplier encontrado" }
+Write-Host "OK: supplierId=$supplierId"
+
+# 2) pegar material
+$m = (curl.exe -s -b $Cookies "$Base/api/materials" | ConvertFrom-Json)
+$material = $m.materials[0]
+if (-not $material.id) { throw "Nenhum material encontrado" }
+$materialId = $material.id
+$unitCost = [decimal]$material.currentCost
+Write-Host "OK: materialId=$materialId name=$($material.name) cost=$unitCost"
+
+# 3) criar PO (ajuste campos se o backend exigir algo a mais)
+$poCreateBody = @{
+  supplierId = $supplierId
+  notes = "E2E curl test"
+}
+$poBody = CurlJson "POST" "$Base/api/purchase-orders" $poCreateBody
+$po = $poBody | ConvertFrom-Json
+$poId = $po.id
+if (-not $poId) { throw "POST /api/purchase-orders não retornou id. Body=`n$poBody" }
+Write-Host "OK: PO criado id=$poId status=$($po.status)"
+
+# 4) adicionar item (ajuste nomes se necessário)
+$itemBody = @{
+  materialId = $materialId
+  quantity = 2
+  unitCost = $unitCost
+}
+$itemResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/items" $itemBody
+Write-Host "OK: item adicionado"
+
+# 5) enviar
+$sendResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/send" @{}
+Write-Host "OK: PO enviado"
+
+# 6) receber (se exigir payload tipo nota/observação, ajuste aqui)
+$recvResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/receive" @{}
+Write-Host "OK: PO recebido"
+
+# 7) validar lista/status
+$list = (curl.exe -s -b $Cookies "$Base/api/purchase-orders" | ConvertFrom-Json)
+$found = $list.purchaseOrders | Where-Object { $_.id -eq $poId } | Select-Object -First 1
+if (-not $found) { throw "PO não apareceu na listagem" }
+Write-Host "OK: PO final status=$($found.status)"
+if ($found.status -ne "RECEIVED") { throw "Esperado RECEIVED, veio $($found.status)" }
+
+Write-Host "E2E PO PASS ✅"
+ -match '^HTTP/' } | Select-Object -Last 1)
+  if (-not $statusLine) { $statusLine = ($headers -split "`r?`n")[0] }
+
+  if ($statusLine -notmatch "HTTP/\S+\s+(\d+)") { throw "Sem status HTTP: $statusLine" }
+  $code = [int]$Matches[1]
+  if ($code -lt 200 -or $code -ge 300) {
+    throw "HTTP $code em $Url`n$body"
+  }
+
+  return $body
+}
+function Login() {
+  Remove-Item $Cookies -ErrorAction SilentlyContinue
+
+  $csrfJson = curl.exe -s -c $Cookies "$Base/api/auth/csrf"
+  $csrf = ($csrfJson | ConvertFrom-Json).csrfToken
+  if (-not $csrf) { throw "CSRF vazio" }
+
+  curl.exe -s -L `
+    -b $Cookies -c $Cookies `
+    -H "Content-Type: application/x-www-form-urlencoded" `
+    --data "csrfToken=$([uri]::EscapeDataString($csrf))&email=$([uri]::EscapeDataString($Email))&password=$([uri]::EscapeDataString($Password))" `
+    "$Base/api/auth/callback/credentials" | Out-Null
+
+  $session = (curl.exe -s -b $Cookies "$Base/api/auth/session" | ConvertFrom-Json)
+  if (-not $session.user.email) { throw "Sessão inválida" }
+  Write-Host "OK: login user=$($session.user.email) role=$($session.user.role)"
 }
 
-async function updateProduct(id: string, payload: any) {
-  const res = await fetch(`/api/products/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar");
-  return data.product;
+Login
+
+# 1) pegar supplier
+$sup = (curl.exe -s -b $Cookies "$Base/api/suppliers" | ConvertFrom-Json)
+$supplierId = $sup.suppliers[0].id
+if (-not $supplierId) { throw "Nenhum supplier encontrado" }
+Write-Host "OK: supplierId=$supplierId"
+
+# 2) pegar material
+$m = (curl.exe -s -b $Cookies "$Base/api/materials" | ConvertFrom-Json)
+$material = $m.materials[0]
+if (-not $material.id) { throw "Nenhum material encontrado" }
+$materialId = $material.id
+$unitCost = [decimal]$material.currentCost
+Write-Host "OK: materialId=$materialId name=$($material.name) cost=$unitCost"
+
+# 3) criar PO (ajuste campos se o backend exigir algo a mais)
+$poCreateBody = @{
+  supplierId = $supplierId
+  notes = "E2E curl test"
+}
+$poBody = CurlJson "POST" "$Base/api/purchase-orders" $poCreateBody
+$po = $poBody | ConvertFrom-Json
+$poId = $po.id
+if (-not $poId) { throw "POST /api/purchase-orders não retornou id. Body=`n$poBody" }
+Write-Host "OK: PO criado id=$poId status=$($po.status)"
+
+# 4) adicionar item (ajuste nomes se necessário)
+$itemBody = @{
+  materialId = $materialId
+  quantity = 2
+  unitCost = $unitCost
+}
+$itemResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/items" $itemBody
+Write-Host "OK: item adicionado"
+
+# 5) enviar
+$sendResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/send" @{}
+Write-Host "OK: PO enviado"
+
+# 6) receber (se exigir payload tipo nota/observação, ajuste aqui)
+$recvResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/receive" @{}
+Write-Host "OK: PO recebido"
+
+# 7) validar lista/status
+$list = (curl.exe -s -b $Cookies "$Base/api/purchase-orders" | ConvertFrom-Json)
+$found = $list.purchaseOrders | Where-Object { $_.id -eq $poId } | Select-Object -First 1
+if (-not $found) { throw "PO não apareceu na listagem" }
+Write-Host "OK: PO final status=$($found.status)"
+if ($found.status -ne "RECEIVED") { throw "Esperado RECEIVED, veio $($found.status)" }
+
+Write-Host "E2E PO PASS ✅"
+) { throw "Sem HTTP code em $Url. Retorno: $code`n$body" }
+  $n = [int]$code
+  if ($n -lt 200 -or $n -ge 300) { throw "HTTP $n em $Url`n$body" }
+
+  return $body
+}
+function Login() {
+  Remove-Item $Cookies -ErrorAction SilentlyContinue
+
+  $csrfJson = curl.exe -s -c $Cookies "$Base/api/auth/csrf"
+  $csrf = ($csrfJson | ConvertFrom-Json).csrfToken
+  if (-not $csrf) { throw "CSRF vazio" }
+
+  curl.exe -s -L `
+    -b $Cookies -c $Cookies `
+    -H "Content-Type: application/x-www-form-urlencoded" `
+    --data "csrfToken=$([uri]::EscapeDataString($csrf))&email=$([uri]::EscapeDataString($Email))&password=$([uri]::EscapeDataString($Password))" `
+    "$Base/api/auth/callback/credentials" | Out-Null
+
+  $session = (curl.exe -s -b $Cookies "$Base/api/auth/session" | ConvertFrom-Json)
+  if (-not $session.user.email) { throw "Sessão inválida" }
+  Write-Host "OK: login user=$($session.user.email) role=$($session.user.role)"
 }
 
-async function deleteProduct(id: string) {
-  const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao remover");
-  return data;
+Login
+
+# 1) pegar supplier
+$sup = (curl.exe -s -b $Cookies "$Base/api/suppliers" | ConvertFrom-Json)
+$supplierId = $sup.suppliers[0].id
+if (-not $supplierId) { throw "Nenhum supplier encontrado" }
+Write-Host "OK: supplierId=$supplierId"
+
+# 2) pegar material
+$m = (curl.exe -s -b $Cookies "$Base/api/materials" | ConvertFrom-Json)
+$material = $m.materials[0]
+if (-not $material.id) { throw "Nenhum material encontrado" }
+$materialId = $material.id
+$unitCost = [decimal]$material.currentCost
+Write-Host "OK: materialId=$materialId name=$($material.name) cost=$unitCost"
+
+# 3) criar PO (ajuste campos se o backend exigir algo a mais)
+$poCreateBody = @{
+  supplierId = $supplierId
+  notes = "E2E curl test"
+}
+$poBody = CurlJson "POST" "$Base/api/purchase-orders" $poCreateBody
+$po = $poBody | ConvertFrom-Json
+$poId = $po.id
+if (-not $poId) { throw "POST /api/purchase-orders não retornou id. Body=`n$poBody" }
+Write-Host "OK: PO criado id=$poId status=$($po.status)"
+
+# 4) adicionar item (ajuste nomes se necessário)
+$itemBody = @{
+  materialId = $materialId
+  quantity = 2
+  unitCost = $unitCost
+}
+$itemResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/items" $itemBody
+Write-Host "OK: item adicionado"
+
+# 5) enviar
+$sendResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/send" @{}
+Write-Host "OK: PO enviado"
+
+# 6) receber (se exigir payload tipo nota/observação, ajuste aqui)
+$recvResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/receive" @{}
+Write-Host "OK: PO recebido"
+
+# 7) validar lista/status
+$list = (curl.exe -s -b $Cookies "$Base/api/purchase-orders" | ConvertFrom-Json)
+$found = $list.purchaseOrders | Where-Object { $_.id -eq $poId } | Select-Object -First 1
+if (-not $found) { throw "PO não apareceu na listagem" }
+Write-Host "OK: PO final status=$($found.status)"
+if ($found.status -ne "RECEIVED") { throw "Esperado RECEIVED, veio $($found.status)" }
+
+Write-Host "E2E PO PASS ✅"
+ -match '^HTTP/' } | Select-Object -Last 1)
+  if (-not $statusLine) { $statusLine = ($headers -split "`r?`n")[0] }
+
+  if ($statusLine -notmatch "HTTP/\S+\s+(\d+)") { throw "Sem status HTTP: $statusLine" }
+  $code = [int]$Matches[1]
+  if ($code -lt 200 -or $code -ge 300) {
+    throw "HTTP $code em $Url`n$body"
+  }
+
+  return $body
+}
+function Login() {
+  Remove-Item $Cookies -ErrorAction SilentlyContinue
+
+  $csrfJson = curl.exe -s -c $Cookies "$Base/api/auth/csrf"
+  $csrf = ($csrfJson | ConvertFrom-Json).csrfToken
+  if (-not $csrf) { throw "CSRF vazio" }
+
+  curl.exe -s -L `
+    -b $Cookies -c $Cookies `
+    -H "Content-Type: application/x-www-form-urlencoded" `
+    --data "csrfToken=$([uri]::EscapeDataString($csrf))&email=$([uri]::EscapeDataString($Email))&password=$([uri]::EscapeDataString($Password))" `
+    "$Base/api/auth/callback/credentials" | Out-Null
+
+  $session = (curl.exe -s -b $Cookies "$Base/api/auth/session" | ConvertFrom-Json)
+  if (-not $session.user.email) { throw "Sessão inválida" }
+  Write-Host "OK: login user=$($session.user.email) role=$($session.user.role)"
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <div className="text-sm font-medium">{label}</div>
-      {children}
-      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
-    </div>
-  );
+Login
+
+# 1) pegar supplier
+$sup = (curl.exe -s -b $Cookies "$Base/api/suppliers" | ConvertFrom-Json)
+$supplierId = $sup.suppliers[0].id
+if (-not $supplierId) { throw "Nenhum supplier encontrado" }
+Write-Host "OK: supplierId=$supplierId"
+
+# 2) pegar material
+$m = (curl.exe -s -b $Cookies "$Base/api/materials" | ConvertFrom-Json)
+$material = $m.materials[0]
+if (-not $material.id) { throw "Nenhum material encontrado" }
+$materialId = $material.id
+$unitCost = [decimal]$material.currentCost
+Write-Host "OK: materialId=$materialId name=$($material.name) cost=$unitCost"
+
+# 3) criar PO (ajuste campos se o backend exigir algo a mais)
+$poCreateBody = @{
+  supplierId = $supplierId
+  notes = "E2E curl test"
 }
+$poBody = CurlJson "POST" "$Base/api/purchase-orders" $poCreateBody
+$po = $poBody | ConvertFrom-Json
+$poId = $po.id
+if (-not $poId) { throw "POST /api/purchase-orders não retornou id. Body=`n$poBody" }
+Write-Host "OK: PO criado id=$poId status=$($po.status)"
 
-export default function ProdutosPage() {
-  const qc = useQueryClient();
-  const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
-
-  const [form, setForm] = React.useState({ name: "", code: "", salePrice: 0, costPrice: 0, type: "COMPOSTO" });
-  const [editing, setEditing] = React.useState<Product | null>(null);
-  const [msg, setMsg] = React.useState<string | null>(null);
-
-  const createMut = useMutation({
-    mutationFn: createProduct,
-    onSuccess: async () => {
-      setMsg("Produto criado!");
-      setForm({ name: "", code: "", salePrice: 0, costPrice: 0, type: "COMPOSTO" });
-      await qc.invalidateQueries({ queryKey: ["products"] });
-    },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, payload }: any) => updateProduct(id, payload),
-    onSuccess: async () => {
-      setMsg("Produto atualizado!");
-      setEditing(null);
-      await qc.invalidateQueries({ queryKey: ["products"] });
-    },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
-  });
-
-  const delMut = useMutation({
-    mutationFn: deleteProduct,
-    onSuccess: async () => {
-      setMsg("Produto removido!");
-      await qc.invalidateQueries({ queryKey: ["products"] });
-    },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
-  });
-
-  const current: any = editing ?? form;
-
-  return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Produtos</h1>
-        <Button asChild variant="outline">
-          <Link href="/cadastros">Voltar</Link>
-        </Button>
-      </div>
-
-      {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
-
-      <Card>
-        <CardHeader><CardTitle>{editing ? "Editar produto" : "Novo produto"}</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Nome *" hint="Ex.: Portão basculante, Grade janela, Corrimão...">
-              <Input
-                placeholder="Nome do produto"
-                value={current.name ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  editing ? setEditing({ ...editing, name: v }) : setForm({ ...form, name: v });
-                }}
-              />
-            </Field>
-
-            <Field label="Código / SKU" hint="Ex.: 000025, PT-01, CORR-10...">
-              <Input
-                placeholder="Código (opcional)"
-                value={current.code ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  editing ? setEditing({ ...editing, code: v }) : setForm({ ...form, code: v });
-                }}
-              />
-            </Field>
-
-            <Field label="Preço de venda (R$)" hint="Ex.: 1999.90">
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={Number(current.salePrice ?? 0)}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  editing ? setEditing({ ...editing, salePrice: v }) : setForm({ ...form, salePrice: v });
-                }}
-              />
-            </Field>
-
-            <Field label="Custo (R$)" hint="Ex.: 1200.00">
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={Number(current.costPrice ?? 0)}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  editing ? setEditing({ ...editing, costPrice: v }) : setForm({ ...form, costPrice: v });
-                }}
-              />
-            </Field>
-
-            <Field label="Tipo" hint="COMPOSTO usa BOM; SIMPLES não usa BOM.">
-              <select
-                className="border rounded p-2 w-full"
-                value={String(current.type ?? "COMPOSTO")}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  editing ? setEditing({ ...editing, type: v }) : setForm({ ...form, type: v });
-                }}
-              >
-                <option value="COMPOSTO">COMPOSTO</option>
-                <option value="SIMPLES">SIMPLES</option>
-              </select>
-            </Field>
-          </div>
-
-          <div className="flex gap-2">
-            {!editing ? (
-              <Button onClick={() => createMut.mutate(form)} disabled={createMut.isPending || !form.name.trim()}>
-                {createMut.isPending ? "Salvando..." : "Criar"}
-              </Button>
-            ) : (
-              <>
-                <Button onClick={() => updateMut.mutate({ id: editing.id, payload: editing })} disabled={updateMut.isPending || !editing.name.trim()}>
-                  {updateMut.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-                <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Lista</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {isLoading && <p>Carregando...</p>}
-          {(products ?? []).map((p) => (
-            <div key={p.id} className="flex items-center justify-between border rounded p-3">
-              <div>
-                <div className="font-medium">
-                  {p.code ? `${p.code} - ` : ""}{p.name} {!p.isActive && <span className="text-xs text-muted-foreground">(inativo)</span>}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Venda: R$ {Number(p.salePrice ?? 0).toFixed(2)} · Custo: R$ {Number(p.costPrice ?? 0).toFixed(2)} · Tipo: {p.type}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
-                <Button variant="destructive" size="sm" onClick={() => delMut.mutate(p.id)} disabled={delMut.isPending}>Remover</Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-  );
+# 4) adicionar item (ajuste nomes se necessário)
+$itemBody = @{
+  materialId = $materialId
+  quantity = 2
+  unitCost = $unitCost
 }
+$itemResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/items" $itemBody
+Write-Host "OK: item adicionado"
+
+# 5) enviar
+$sendResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/send" @{}
+Write-Host "OK: PO enviado"
+
+# 6) receber (se exigir payload tipo nota/observação, ajuste aqui)
+$recvResp = CurlJson "POST" "$Base/api/purchase-orders/$poId/receive" @{}
+Write-Host "OK: PO recebido"
+
+# 7) validar lista/status
+$list = (curl.exe -s -b $Cookies "$Base/api/purchase-orders" | ConvertFrom-Json)
+$found = $list.purchaseOrders | Where-Object { $_.id -eq $poId } | Select-Object -First 1
+if (-not $found) { throw "PO não apareceu na listagem" }
+Write-Host "OK: PO final status=$($found.status)"
+if ($found.status -ne "RECEIVED") { throw "Esperado RECEIVED, veio $($found.status)" }
+
+Write-Host "E2E PO PASS ✅"
