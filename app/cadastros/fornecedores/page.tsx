@@ -29,6 +29,28 @@ function onlyDigits(s: string) {
   return (s ?? "").replace(/\D/g, "");
 }
 
+
+function validateCnpj(cnpj: string) {
+  const s = onlyDigits(cnpj);
+  if (s.length !== 14) return false;
+  if (/^(\d)\1+$/.test(s)) return false; // todos iguais
+
+  const calc = (base: string, weights: number[]) => {
+    let sum = 0;
+    for (let i = 0; i < weights.length; i++) sum += Number(base[i]) * weights[i];
+    const mod = sum % 11;
+    return mod < 2 ? 0 : 11 - mod;
+  };
+
+  const w1 = [5,4,3,2,9,8,7,6,5,4,3,2];
+  const w2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+
+  const d1 = calc(s.slice(0, 12), w1);
+  const d2 = calc(s.slice(0, 12) + String(d1), w2);
+
+  return s.endsWith(String(d1) + String(d2));
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -74,12 +96,24 @@ async function deleteSupplier(id: string) {
   return data;
 }
 
-async function lookupCnpj(cnpj: string) {
-  const q = onlyDigits(cnpj);
-  if (q.length !== 14) throw new Error("CNPJ inválido (precisa ter 14 dígitos)");
-  const res = await fetch(`/api/br/cnpj?q=${q}`);
+async function lookupCnpj(doc: string) {
+  const q = onlyDigits(doc);
+
+  // CPF: não fazemos lookup automático (segue manual)
+  if (q.length === 11) {
+    return { __skip: true, message: "CPF detectado. Preencha manualmente (lookup automático é só para CNPJ)." };
+  }
+
+  if (q.length !== 14) throw new Error("Documento inválido (CPF=11 dígitos, CNPJ=14 dígitos)");
+  if (!validateCnpj(q)) throw new Error("CNPJ inválido (dígitos verificadores não conferem)");
+
+  const res = await fetch(`/api/br/cnpj?q=${q}`, { credentials: "include" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Falha no lookup");
+  if (!res.ok) {
+    const code = data?.error ?? "Falha no lookup";
+    if (code === "cnpj_not_found") throw new Error("CNPJ não encontrado na base pública (BrasilAPI). Preencha manualmente e cadastre assim mesmo.");
+    throw new Error(code);
+  }
   return data.data;
 }
 
@@ -156,6 +190,11 @@ export default function FornecedoresPage() {
   const cnpjMut = useMutation({
     mutationFn: (cnpj: string) => lookupCnpj(cnpj),
     onSuccess: (d: any) => {
+      if (d?.__skip) {
+        setMsg(d.message ?? "Documento não é CNPJ. Preencha manualmente.");
+        return;
+      }
+
       // preenche automático (sem travar IE/IM — pode deixar em branco e completar depois)
       const next: any = {
         document: d?.cnpj ?? current.document ?? "",
@@ -209,7 +248,7 @@ export default function FornecedoresPage() {
                 <Button
                   variant="outline"
                   onClick={() => cnpjMut.mutate(String(current.document ?? ""))}
-                  disabled={cnpjMut.isPending || onlyDigits(String(current.document ?? "")).length !== 14}
+                  disabled={cnpjMut.isPending || (onlyDigits(String(current.document ?? "")).length === 14 ? !validateCnpj(String(current.document ?? "")) : false)}
                 >
                   {cnpjMut.isPending ? "Buscando..." : "Buscar CNPJ"}
                 </Button>
@@ -309,3 +348,5 @@ export default function FornecedoresPage() {
     </div>
   );
 }
+
+
