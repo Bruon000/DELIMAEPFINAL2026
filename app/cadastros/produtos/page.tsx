@@ -175,7 +175,7 @@ export default function ProdutosPage() {
                 }}
               >
                 <option value="COMPOSTO">COMPOSTO</option>
-                <option value="SIMPLE">SIMPLES</option>
+                <option value="SIMPLE">SIMPLE</option>
               </select>
             </Field>
           </div>
