@@ -10,57 +10,26 @@ import { Input } from "@/components/ui/input";
 type Client = {
   id: string;
   name: string;
+  tradeName?: string | null;
   document?: string | null;
+  ie?: string | null;
+  im?: string | null;
   email?: string | null;
   phone?: string | null;
+  addressStreet?: string | null;
+  addressNumber?: string | null;
+  addressDistrict?: string | null;
+  addressCity?: string | null;
+  addressState?: string | null;
+  addressZip?: string | null;
   isActive: boolean;
 };
 
-async function fetchClients(): Promise<Client[]> {
-  const res = await fetch("/api/clients");
-  if (!res.ok) throw new Error("Erro ao carregar clientes");
-  const data = await res.json();
-  return data.clients ?? [];
+function onlyDigits(s: string) {
+  return (s ?? "").replace(/\D/g, "");
 }
 
-async function createClient(payload: any) {
-  const res = await fetch("/api/clients", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao criar");
-  return data.client;
-}
-
-async function updateClient(id: string, payload: any) {
-  const res = await fetch(`/api/clients/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar");
-  return data.client;
-}
-
-async function deleteClient(id: string) {
-  const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao remover");
-  return data;
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
       <div className="text-sm font-medium">{label}</div>
@@ -70,59 +39,96 @@ function Field({
   );
 }
 
-// máscara simples (visual) — não bloqueia colar/editar
-function formatCpfCnpj(v: string) {
-  const digits = v.replace(/\D/g, "").slice(0, 14);
-  if (digits.length <= 11) {
-    // CPF: 000.000.000-00
-    return digits
-      .replace(/^(\d{3})(\d)/, "$1.$2")
-      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/\.(\d{3})(\d)/, ".$1-$2");
-  }
-  // CNPJ: 00.000.000/0000-00
-  return digits
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1/$2")
-    .replace(/(\d{4})(\d)/, "$1-$2");
+async function fetchClients() {
+  const res = await fetch("/api/clients", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar clientes");
+  return res.json();
 }
 
-function formatPhone(v: string) {
-  const d = v.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 10) {
-    // (11) 9999-9999
-    return d
-      .replace(/^(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{4})(\d)/, "$1-$2");
-  }
-  // (11) 99999-9999
-  return d
-    .replace(/^(\d{2})(\d)/, "($1) $2")
-    .replace(/(\d{5})(\d)/, "$1-$2");
+async function createClient(payload: any) {
+  const res = await fetch("/api/clients", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao criar");
+  return data.client ?? data;
+}
+
+async function updateClient(id: string, payload: any) {
+  const res = await fetch(`/api/clients/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar");
+  return data.client ?? data;
+}
+
+async function deleteClient(id: string) {
+  const res = await fetch(`/api/clients/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao remover");
+  return data;
+}
+
+async function lookupCnpj(cnpj: string) {
+  const q = onlyDigits(cnpj);
+  if (q.length !== 14) throw new Error("CNPJ inválido (precisa ter 14 dígitos)");
+  const res = await fetch(`/api/br/cnpj?q=${q}`, { credentials: "include" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Falha no lookup");
+  return data.data;
 }
 
 export default function ClientesPage() {
   const qc = useQueryClient();
-  const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients"],
-    queryFn: fetchClients,
-  });
+  const { data, isLoading } = useQuery({ queryKey: ["clients"], queryFn: fetchClients });
 
-  const [form, setForm] = React.useState({
-    name: "",
+  const clients: Client[] = data?.clients ?? data?.items ?? data?.data ?? [];
+
+  const [form, setForm] = React.useState<any>({`r`n    docType: "CPF",`r`nname: "",
+    tradeName: "",
     document: "",
+    ie: "",
+    im: "",
     email: "",
     phone: "",
+    addressStreet: "",
+    addressNumber: "",
+    addressDistrict: "",
+    addressCity: "",
+    addressState: "",
+    addressZip: "",
   });
+
   const [editing, setEditing] = React.useState<Client | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  const createMut = useMutation({
+  const current = (editing as any) ?? form;
+const docType = String(current?.docType ?? "CPF");const createMut = useMutation({
     mutationFn: createClient,
     onSuccess: async () => {
       setMsg("Cliente criado!");
-      setForm({ name: "", document: "", email: "", phone: "" });
+      setForm({
+        name: "",
+        tradeName: "",
+        document: "",
+        ie: "",
+        im: "",
+        email: "",
+        phone: "",
+        addressStreet: "",
+        addressNumber: "",
+        addressDistrict: "",
+        addressCity: "",
+        addressState: "",
+        addressZip: "",
+      });
       await qc.invalidateQueries({ queryKey: ["clients"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
@@ -147,14 +153,42 @@ export default function ClientesPage() {
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const current: any = editing ?? form;
+  const cnpjMut = useMutation({
+    mutationFn: (cnpj: string) => lookupCnpj(cnpj),
+    onSuccess: (d: any) => {
+      const next: any = {
+        document: d?.cnpj ?? current.document ?? "",
+        name: d?.razaoSocial ?? current.name ?? "",
+        tradeName: d?.nomeFantasia ?? current.tradeName ?? "",
+        email: d?.email ?? current.email ?? "",
+        phone: d?.telefone ?? current.phone ?? "",
+        addressStreet: d?.logradouro ?? current.addressStreet ?? "",
+        addressNumber: d?.numero ?? current.addressNumber ?? "",
+        addressDistrict: d?.bairro ?? current.addressDistrict ?? "",
+        addressCity: d?.municipio ?? current.addressCity ?? "",
+        addressState: d?.uf ?? current.addressState ?? "",
+        addressZip: d?.cep ?? current.addressZip ?? "",
+      };
+
+      if (editing) setEditing({ ...(editing as any), ...next });
+      else setForm({ ...form, ...next });
+
+      setMsg("Dados preenchidos pelo CNPJ. (IE/IM podem ficar em branco)");
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
+
+  const setVal = (key: string, val: any) => {
+    if (editing) setEditing({ ...(editing as any), [key]: val });
+    else setForm({ ...form, [key]: val });
+  };
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Clientes</h1>
         <Button asChild variant="outline">
-          <Link href="/cadastros">Voltar</Link>
+          <Link href="/dashboard">Voltar</Link>
         </Button>
       </div>
 
@@ -164,76 +198,99 @@ export default function ClientesPage() {
         <CardHeader>
           <CardTitle>{editing ? "Editar cliente" : "Novo cliente"}</CardTitle>
         </CardHeader>
-
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Nome *" hint="Nome/Razão social">
-              <Input
-                placeholder="Ex.: João da Silva / Serralheria XPTO"
-                value={current.name ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  editing
-                    ? setEditing({ ...editing, name: v })
-                    : setForm({ ...form, name: v });
-                }}
-              />
+          <div className="grid gap-4 md:grid-cols-2">            <Field label="Documento" hint={docType === "CNPJ" ? "CNPJ: digite e clique em “Buscar” para preencher automático (BrasilAPI)" : "CPF: preencha manualmente"}>
+              <div className="flex gap-2">
+                <select
+                  className="border rounded px-2 py-2"
+                  value={docType}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setVal("docType", v);
+                    setVal("document", "");
+                    setMsg(null);
+                  }}
+                >
+                  <option value="CPF">CPF</option>
+                  <option value="CNPJ">CNPJ</option>
+                </select>
+
+                <Input
+                  placeholder={docType === "CNPJ" ? "00.000.000/0000-00" : "000.000.000-00"}
+                  value={current.document ?? ""}
+                  onChange={(e) => setVal("document", e.target.value)}
+                />
+
+                {docType === "CNPJ" ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => cnpjMut.mutate(String(current.document ?? ""))}
+                    disabled={cnpjMut.isPending || onlyDigits(String(current.document ?? "")).length !== 14}
+                  >
+                    {cnpjMut.isPending ? "Buscando..." : "Buscar"}
+                  </Button>
+                ) : null}
+              </div>
+            </Field>
+            <Field label="Razão social / Nome *" hint="Razão social (CNPJ) ou nome do cliente">
+              <Input placeholder="Nome" value={current.name ?? ""} onChange={(e) => setVal("name", e.target.value)} />
             </Field>
 
-            <Field label="Documento" hint="CPF ou CNPJ (opcional)">
-              <Input
-                placeholder="000.000.000-00 / 00.000.000/0000-00"
-                value={formatCpfCnpj(String(current.document ?? ""))}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  editing
-                    ? setEditing({ ...editing, document: raw })
-                    : setForm({ ...form, document: raw });
-                }}
-              />
+            <Field label="Nome fantasia" hint="Opcional">
+              <Input placeholder="Nome fantasia" value={current.tradeName ?? ""} onChange={(e) => setVal("tradeName", e.target.value)} />
             </Field>
 
-            <Field label="Email" hint="Opcional (para envio de orçamento/recibos)">
-              <Input
-                placeholder="email@exemplo.com"
-                type="email"
-                value={String(current.email ?? "")}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  editing
-                    ? setEditing({ ...editing, email: v })
-                    : setForm({ ...form, email: v });
-                }}
-              />
+            <Field label="IE / Inscrição Estadual" hint="Pode ficar em branco e preencher depois">
+              <Input placeholder="IE (opcional)" value={current.ie ?? ""} onChange={(e) => setVal("ie", e.target.value)} />
+            </Field>
+
+            <Field label="IM / Inscrição Municipal" hint="Pode ficar em branco e preencher depois">
+              <Input placeholder="IM (opcional)" value={current.im ?? ""} onChange={(e) => setVal("im", e.target.value)} />
+            </Field>
+
+            <Field label="Email" hint="Opcional">
+              <Input placeholder="email@cliente.com" value={current.email ?? ""} onChange={(e) => setVal("email", e.target.value)} />
             </Field>
 
             <Field label="Telefone" hint="Opcional">
-              <Input
-                placeholder="(11) 99999-9999"
-                value={formatPhone(String(current.phone ?? ""))}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  editing
-                    ? setEditing({ ...editing, phone: v })
-                    : setForm({ ...form, phone: v });
-                }}
-              />
+              <Input placeholder="(xx) xxxxx-xxxx" value={current.phone ?? ""} onChange={(e) => setVal("phone", e.target.value)} />
+            </Field>
+
+            <Field label="Logradouro" hint="Rua/Av">
+              <Input placeholder="Rua/Av" value={current.addressStreet ?? ""} onChange={(e) => setVal("addressStreet", e.target.value)} />
+            </Field>
+
+            <Field label="Número" hint="Opcional">
+              <Input placeholder="Número" value={current.addressNumber ?? ""} onChange={(e) => setVal("addressNumber", e.target.value)} />
+            </Field>
+
+            <Field label="Bairro" hint="Opcional">
+              <Input placeholder="Bairro" value={current.addressDistrict ?? ""} onChange={(e) => setVal("addressDistrict", e.target.value)} />
+            </Field>
+
+            <Field label="Cidade" hint="Opcional">
+              <Input placeholder="Cidade" value={current.addressCity ?? ""} onChange={(e) => setVal("addressCity", e.target.value)} />
+            </Field>
+
+            <Field label="UF" hint="Ex.: SP, RJ, CE">
+              <Input placeholder="UF" value={current.addressState ?? ""} onChange={(e) => setVal("addressState", e.target.value)} />
+            </Field>
+
+            <Field label="CEP" hint="Ex.: 00000-000">
+              <Input placeholder="CEP" value={current.addressZip ?? ""} onChange={(e) => setVal("addressZip", e.target.value)} />
             </Field>
           </div>
 
           <div className="flex gap-2">
             {!editing ? (
-              <Button
-                onClick={() => createMut.mutate(form)}
-                disabled={createMut.isPending || !String(form.name).trim()}
-              >
+              <Button onClick={() => createMut.mutate(form)} disabled={createMut.isPending || !String(form.name ?? "").trim()}>
                 {createMut.isPending ? "Salvando..." : "Criar"}
               </Button>
             ) : (
               <>
                 <Button
                   onClick={() => updateMut.mutate({ id: editing.id, payload: editing })}
-                  disabled={updateMut.isPending || !String(editing.name).trim()}
+                  disabled={updateMut.isPending || !String(editing.name ?? "").trim()}
                 >
                   {updateMut.isPending ? "Salvando..." : "Salvar"}
                 </Button>
@@ -250,28 +307,27 @@ export default function ClientesPage() {
         <CardHeader><CardTitle>Lista</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {isLoading && <p>Carregando...</p>}
-          {(clients ?? []).map((c) => (
+          {clients.map((c) => (
             <div key={c.id} className="flex items-center justify-between border rounded p-3">
               <div>
                 <div className="font-medium">
-                  {c.name} {!c.isActive && <span className="text-xs text-muted-foreground">(inativo)</span>}
+                  {c.name} {c.tradeName ? <span className="text-sm text-muted-foreground">· {c.tradeName}</span> : null}
+                  {!c.isActive && <span className="text-xs text-muted-foreground"> (inativo)</span>}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {c.document ? `Doc: ${c.document} · ` : ""}
-                  {c.email ? `Email: ${c.email} · ` : ""}
-                  {c.phone ? `Tel: ${c.phone}` : ""}
+                  {c.document ? `Doc: ${c.document} · ` : ""}{c.email ? `Email: ${c.email} · ` : ""}{c.phone ? `Tel: ${c.phone}` : ""}
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditing(c)}>Editar</Button>
-                <Button variant="destructive" size="sm" onClick={() => delMut.mutate(c.id)} disabled={delMut.isPending}>
-                  Remover
-                </Button>
+                <Button variant="destructive" size="sm" onClick={() => delMut.mutate(c.id)} disabled={delMut.isPending}>Remover</Button>
               </div>
             </div>
           ))}
+          {clients.length === 0 && !isLoading && <p className="text-muted-foreground">Sem clientes.</p>}
         </CardContent>
       </Card>
     </div>
   );
 }
+
