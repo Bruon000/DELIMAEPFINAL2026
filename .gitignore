@@ -44,3 +44,6 @@ coverage
 
 .backups/
 
+# local / debug
+cookies.txt
+scripts/bootstrap-demo.js

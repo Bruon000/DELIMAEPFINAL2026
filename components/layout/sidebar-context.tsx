@@ -21,7 +21,7 @@ export function SidebarProvider({
   const width = collapsed ? 64 : 260;
   const value = React.useMemo(
     () => ({ collapsed, setCollapsed, width }),
-    [collapsed]
+    [collapsed, width]
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
@@ -31,3 +31,4 @@ export function useSidebar() {
   if (!ctx) throw new Error("useSidebar must be used within SidebarProvider");
   return ctx;
 }
+
