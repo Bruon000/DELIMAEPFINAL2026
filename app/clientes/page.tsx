@@ -91,22 +91,22 @@ export default function ClientesPage() {
 
   const clients: Client[] = data?.clients ?? data?.items ?? data?.data ?? [];
 
-  const [form, setForm] = React.useState<any>({`r`n    docType: "CPF",`r`nname: "",
-    tradeName: "",
-    document: "",
-    ie: "",
-    im: "",
-    email: "",
-    phone: "",
-    addressStreet: "",
-    addressNumber: "",
-    addressDistrict: "",
-    addressCity: "",
-    addressState: "",
-    addressZip: "",
-  });
-
-  const [editing, setEditing] = React.useState<Client | null>(null);
+  const [form, setForm] = React.useState<any>({
+  docType: "CPF",
+  name: "",
+  tradeName: "",
+  document: "",
+  ie: "",
+  im: "",
+  email: "",
+  phone: "",
+  addressStreet: "",
+  addressNumber: "",
+  addressDistrict: "",
+  addressCity: "",
+  addressState: "",
+  addressZip: "",
+});const [editing, setEditing] = React.useState<Client | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
 
   const current = (editing as any) ?? form;
@@ -330,4 +330,5 @@ const docType = String(current?.docType ?? "CPF");const createMut = useMutation(
     </div>
   );
 }
+
 
