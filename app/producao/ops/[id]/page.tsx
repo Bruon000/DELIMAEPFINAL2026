@@ -13,8 +13,14 @@ async function fetchOp(id: string) {
   const res = await fetch(`/api/production-orders/${id}`, { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar OP");
-  // compat: pode vir como {op} ou {productionOrder} ou direto
   return data?.op ?? data?.productionOrder ?? data;
+}
+
+async function fetchOrder(orderId: string) {
+  const res = await fetch(`/api/orders/${orderId}`, { cache: "no-store" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar pedido");
+  return data?.order ?? data;
 }
 
 async function fetchOrderMaterials(orderId: string) {
@@ -53,13 +59,21 @@ export default function OpDetailPage() {
   const qc = useQueryClient();
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  const { data: op, isLoading, error } = useQuery({
+  const opQ = useQuery({
     queryKey: ["op", id],
     queryFn: () => fetchOp(id),
     enabled: !!id,
   });
 
-  const orderId = op?.orderId ?? op?.order?.id ?? null;
+  const op = opQ.data;
+  const status = String(op?.status ?? "");
+  const orderId = op?.orderId ?? null;
+
+  const orderQ = useQuery({
+    queryKey: ["order", orderId],
+    queryFn: () => fetchOrder(String(orderId)),
+    enabled: !!orderId,
+  });
 
   const matsQ = useQuery({
     queryKey: ["order-materials", orderId],
@@ -83,14 +97,17 @@ export default function OpDetailPage() {
       setMsg("OP finalizada e materiais baixados.");
       await qc.invalidateQueries({ queryKey: ["op", id] });
       await qc.invalidateQueries({ queryKey: ["ops"] });
-      if (orderId) await qc.invalidateQueries({ queryKey: ["order-materials", orderId] });
+      if (orderId) {
+        await qc.invalidateQueries({ queryKey: ["order", orderId] });
+        await qc.invalidateQueries({ queryKey: ["order-materials", orderId] });
+      }
       await qc.invalidateQueries({ queryKey: ["materials"] });
       await qc.invalidateQueries({ queryKey: ["stock-ledger"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  if (isLoading) {
+  if (opQ.isLoading) {
     return (
       <div className="space-y-4 p-6">
         <Skeleton className="h-8 w-72" />
@@ -100,17 +117,16 @@ export default function OpDetailPage() {
     );
   }
 
-  if (error || !op) {
+  if (opQ.error || !op) {
     return <div className="p-6 text-sm text-red-600">Falha ao carregar OP.</div>;
   }
 
-  const status = String(op.status ?? "");
   const canStart = status === "QUEUED" || status === "BLOCKED";
   const canFinish = status === "IN_PROGRESS";
 
-  const order = op?.order ?? null;
+  const order = orderQ.data ?? null;
   const items = order?.items ?? [];
-  const mats = matsQ.data?.materials ?? matsQ.data?.items ?? [];
+  const mats = matsQ.data?.materials ?? [];
 
   return (
     <div className="space-y-4 p-6">
@@ -157,10 +173,20 @@ export default function OpDetailPage() {
           <CardTitle>Pedido</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <div><b>ID:</b> {order?.id ?? "-"}</div>
-          <div><b>Número:</b> {order?.number ?? "-"}</div>
-          <div><b>Cliente:</b> {order?.client?.name ?? "-"}</div>
-          <div><b>Status:</b> {order?.status ?? "-"}</div>
+          {!orderId ? (
+            <div className="text-muted-foreground">OP sem pedido vinculado.</div>
+          ) : orderQ.isLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : orderQ.error ? (
+            <div className="text-red-600">Falha ao carregar pedido.</div>
+          ) : (
+            <>
+              <div><b>ID:</b> {order?.id ?? "-"}</div>
+              <div><b>Número:</b> {order?.number ?? "-"}</div>
+              <div><b>Cliente:</b> {order?.client?.name ?? "-"}</div>
+              <div><b>Status:</b> {order?.status ?? "-"}</div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -169,7 +195,11 @@ export default function OpDetailPage() {
           <CardTitle>Itens do pedido</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {items.length === 0 ? (
+          {!orderId ? (
+            <div className="text-sm text-muted-foreground">Sem pedido.</div>
+          ) : orderQ.isLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : items.length === 0 ? (
             <div className="text-sm text-muted-foreground">Sem itens.</div>
           ) : (
             <div className="space-y-2">
@@ -189,7 +219,9 @@ export default function OpDetailPage() {
           <CardTitle>Materiais calculados</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {matsQ.isLoading ? (
+          {!orderId ? (
+            <div className="text-sm text-muted-foreground">Sem pedido.</div>
+          ) : matsQ.isLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : matsQ.error ? (
             <div className="text-sm text-red-600">Falha ao carregar materiais.</div>
@@ -198,12 +230,12 @@ export default function OpDetailPage() {
           ) : (
             <div className="space-y-2">
               {mats.map((m: any) => (
-                <div key={m.materialId ?? m.id ?? m.name} className="grid grid-cols-5 gap-2 border rounded p-2 text-sm">
-                  <div className="col-span-2 font-medium">{m.name ?? m.material?.name ?? "Material"}</div>
-                  <div>Necessario: {m.need ?? m.quantity ?? "-"} {m.unit ?? m.material?.unit?.code ?? ""}</div>
-                  <div>Disponivel: {m.available ?? m.stock ?? "-"} {m.unit ?? m.material?.unit?.code ?? ""}</div>
-                  <div className={(m.shortage ?? 0) > 0 ? "text-red-600 font-medium" : "text-emerald-700 font-medium"}>
-                    Falta: {m.shortage ?? 0} {m.unit ?? m.material?.unit?.code ?? ""}
+                <div key={m.materialId} className="grid grid-cols-5 gap-2 border rounded p-2 text-sm">
+                  <div className="col-span-2 font-medium">{m.name}</div>
+                  <div>Necessario: {m.need} {m.unit}</div>
+                  <div>Disponivel: {m.available} {m.unit}</div>
+                  <div className={m.shortage > 0 ? "text-red-600 font-medium" : "text-emerald-700 font-medium"}>
+                    Falta: {m.shortage} {m.unit}
                   </div>
                 </div>
               ))}
@@ -214,3 +246,4 @@ export default function OpDetailPage() {
     </div>
   );
 }
+
