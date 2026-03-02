@@ -77,7 +77,7 @@ export default function CompraDetailPage() {
   const matsQ = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
 
   const po = poQ.data?.purchaseOrder;
-  const items = (po?.items ?? []) as any[];
+  const items = React.useMemo(() => (po?.items ?? []) as any[], [po?.items]);
   const status = String(po?.status ?? "").toUpperCase();
 
   const [materialId, setMaterialId] = React.useState("");
@@ -327,3 +327,4 @@ export default function CompraDetailPage() {
     </div>
   );
 }
+
