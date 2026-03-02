@@ -1,38 +1,71 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 async function fetchOp(id: string) {
-  const res = await fetch(`/api/production-orders/${id}`);
-  if (!res.ok) throw new Error("Erro ao carregar OP");
-  return res.json();
+  const res = await fetch(`/api/production-orders/${id}`, { cache: "no-store" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar OP");
+  // compat: pode vir como {op} ou {productionOrder} ou direto
+  return data?.op ?? data?.productionOrder ?? data;
+}
+
+async function fetchOrderMaterials(orderId: string) {
+  const res = await fetch(`/api/orders/${orderId}/materials`, { cache: "no-store" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar materiais do pedido");
+  return data;
 }
 
 async function startOp(id: string) {
   const res = await fetch(`/api/production-orders/${id}/start`, { method: "POST" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao iniciar");
+  if (!res.ok) throw new Error(data?.error ?? "Erro ao iniciar");
   return data;
 }
 
 async function finishOp(id: string) {
   const res = await fetch(`/api/production-orders/${id}/finish`, { method: "POST" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao finalizar");
+  if (!res.ok) throw new Error(data?.error ?? "Erro ao finalizar");
   return data;
+}
+
+function Badge({ status }: { status: string }) {
+  const s = String(status ?? "").toUpperCase();
+  const base = "inline-flex items-center rounded px-2 py-1 text-xs font-medium";
+  if (s === "DONE") return <span className={`${base} bg-emerald-100 text-emerald-800`}>DONE</span>;
+  if (s === "IN_PROGRESS") return <span className={`${base} bg-blue-100 text-blue-800`}>IN_PROGRESS</span>;
+  if (s === "BLOCKED") return <span className={`${base} bg-amber-100 text-amber-800`}>BLOCKED</span>;
+  return <span className={`${base} bg-zinc-100 text-zinc-800`}>QUEUED</span>;
 }
 
 export default function OpDetailPage() {
   const params = useParams();
-  const id = String(params.id);
+  const id = String((params as any)?.id ?? "");
   const qc = useQueryClient();
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({ queryKey: ["op", id], queryFn: () => fetchOp(id) });
+  const { data: op, isLoading, error } = useQuery({
+    queryKey: ["op", id],
+    queryFn: () => fetchOp(id),
+    enabled: !!id,
+  });
+
+  const orderId = op?.orderId ?? op?.order?.id ?? null;
+
+  const matsQ = useQuery({
+    queryKey: ["order-materials", orderId],
+    queryFn: () => fetchOrderMaterials(String(orderId)),
+    enabled: !!orderId,
+  });
 
   const startMut = useMutation({
     mutationFn: () => startOp(id),
@@ -50,79 +83,132 @@ export default function OpDetailPage() {
       setMsg("OP finalizada e materiais baixados.");
       await qc.invalidateQueries({ queryKey: ["op", id] });
       await qc.invalidateQueries({ queryKey: ["ops"] });
+      if (orderId) await qc.invalidateQueries({ queryKey: ["order-materials", orderId] });
+      await qc.invalidateQueries({ queryKey: ["materials"] });
+      await qc.invalidateQueries({ queryKey: ["stock-ledger"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  if (isLoading) return <div className="p-6">Carregando...</div>;
-  const op = data?.op;
-  if (!op) return <div className="p-6">OP não encontrada.</div>;
+  if (isLoading) {
+    return (
+      <div className="space-y-4 p-6">
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
 
-  const required = data?.requiredByMaterial ?? {};
-  const stock = data?.stock ?? [];
-  const stockMap = new Map(stock.map((s: any) => [s.materialId, s]));
+  if (error || !op) {
+    return <div className="p-6 text-sm text-red-600">Falha ao carregar OP.</div>;
+  }
 
-  const rows = Object.entries(required).map(([materialId, need]: any) => {
-    const s = stockMap.get(materialId) as { quantity?: unknown; reserved?: unknown } | undefined;
-    const qty = Number(s?.quantity ?? 0);
-    const res = Number(s?.reserved ?? 0);
-    const available = qty - res;
-    const ok = available + 1e-9 >= Number(need);
-    return { materialId, need: Number(need), qty, res, available, ok };
-  });
+  const status = String(op.status ?? "");
+  const canStart = status === "QUEUED" || status === "BLOCKED";
+  const canFinish = status === "IN_PROGRESS";
 
-  const hasShortage = rows.some((r) => !r.ok);
-
-  const canStart = String(op.status) === "PENDING";
-  const canFinish = String(op.status) === "IN_PROGRESS" && !hasShortage;
+  const order = op?.order ?? null;
+  const items = order?.items ?? [];
+  const mats = matsQ.data?.materials ?? matsQ.data?.items ?? [];
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">OP</h1>
+    <div className="space-y-4 p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">OP {op.id}</h1>
+          <div className="mt-1 flex items-center gap-2">
+            <Badge status={status} />
+            {orderId ? (
+              <Link href={`/pedidos/${orderId}`} className="text-sm underline text-muted-foreground">
+                Ver pedido
+              </Link>
+            ) : null}
+          </div>
+          {msg ? <div className="mt-2 text-sm text-muted-foreground">{msg}</div> : null}
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            disabled={startMut.isPending || !canStart}
+            onClick={() => {
+              if (!confirm("Iniciar esta OP?")) return;
+              startMut.mutate();
+            }}
+          >
+            Iniciar
+          </Button>
+
+          <Button
+            disabled={finishMut.isPending || !canFinish}
+            variant="secondary"
+            onClick={() => {
+              if (!confirm("Finalizar esta OP? Isso vai consumir materiais do estoque.")) return;
+              finishMut.mutate();
+            }}
+          >
+            Finalizar
+          </Button>
+        </div>
+      </div>
 
       <Card>
-        <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <div><b>Status:</b> {op.status}</div>
-          <div><b>Pedido:</b> {op.orderId}</div>
-          <div><b>Cliente:</b> {op.order?.client?.name ?? "—"}</div>
-
-          <div className="pt-2 flex gap-2 items-center">
-            <Button disabled={!canStart || startMut.isPending} onClick={() => startMut.mutate()}>
-              {startMut.isPending ? "Iniciando..." : "Iniciar"}
-            </Button>
-
-            <Button disabled={!canFinish || finishMut.isPending} onClick={() => finishMut.mutate()}>
-              {finishMut.isPending ? "Finalizando..." : "Finalizar (baixar materiais)"}
-            </Button>
-
-            {String(op.status) === "IN_PROGRESS" && hasShortage && (
-              <span className="text-sm text-red-600">Falta material disponível (estoque - reservado).</span>
-            )}
-          </div>
-
-          {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
+        <CardHeader>
+          <CardTitle>Pedido</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div><b>ID:</b> {order?.id ?? "-"}</div>
+          <div><b>Número:</b> {order?.number ?? "-"}</div>
+          <div><b>Cliente:</b> {order?.client?.name ?? "-"}</div>
+          <div><b>Status:</b> {order?.status ?? "-"}</div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Materiais (calculado por BOM)</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Itens do pedido</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-2">
-          {rows.length === 0 && <p className="text-muted-foreground">Sem BOM nos produtos.</p>}
-
-          {rows.map((r) => (
-            <div key={r.materialId} className="flex items-center justify-between border rounded p-3">
-              <div>
-                <div className="font-medium">{r.materialId}</div>
-                <div className="text-sm text-muted-foreground">
-                  Necessário: {r.need.toFixed(4)} · Disponível: {r.available.toFixed(4)} · Estoque: {r.qty.toFixed(4)} · Reservado: {r.res.toFixed(4)}
+          {items.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Sem itens.</div>
+          ) : (
+            <div className="space-y-2">
+              {items.map((it: any) => (
+                <div key={it.id} className="flex items-center justify-between border rounded p-2">
+                  <div className="font-medium">{it.product?.name ?? "Produto"}</div>
+                  <div className="text-sm text-muted-foreground">Qtd: {it.quantity}</div>
                 </div>
-              </div>
-              <div className={r.ok ? "text-sm text-green-600" : "text-sm text-red-600"}>
-                {r.ok ? "OK" : "FALTA"}
-              </div>
+              ))}
             </div>
-          ))}
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Materiais calculados</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {matsQ.isLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : matsQ.error ? (
+            <div className="text-sm text-red-600">Falha ao carregar materiais.</div>
+          ) : mats.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Sem materiais calculados.</div>
+          ) : (
+            <div className="space-y-2">
+              {mats.map((m: any) => (
+                <div key={m.materialId ?? m.id ?? m.name} className="grid grid-cols-5 gap-2 border rounded p-2 text-sm">
+                  <div className="col-span-2 font-medium">{m.name ?? m.material?.name ?? "Material"}</div>
+                  <div>Necessario: {m.need ?? m.quantity ?? "-"} {m.unit ?? m.material?.unit?.code ?? ""}</div>
+                  <div>Disponivel: {m.available ?? m.stock ?? "-"} {m.unit ?? m.material?.unit?.code ?? ""}</div>
+                  <div className={(m.shortage ?? 0) > 0 ? "text-red-600 font-medium" : "text-emerald-700 font-medium"}>
+                    Falta: {m.shortage ?? 0} {m.unit ?? m.material?.unit?.code ?? ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

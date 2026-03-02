@@ -101,7 +101,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Apontamento de tempo (TimeEntry) (schema)
 - [ ] PWA Produção (mobile-first)
 - [x] Lista de OPs com filtro por status
-- [ ] Detalhe da OP com: pedido, itens, anexos, materiais calculados
+- [x] Detalhe da OP com: pedido, itens, anexos, materiais calculados
 - [x] Atualizar status (iniciar/finalizar)
 - [ ] Offline: cache + fila (outbox) de updates
 - [ ] Sync automático ao voltar online
@@ -316,6 +316,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [ ] Seeds completos (unidades, materiais, categorias, exemplos)
 - [ ] Validações e masks (CPF/CNPJ, moeda, decimal)
 - [ ] Testes mínimos (smoke) e página “Saúde do sistema”
+
 
 
 
