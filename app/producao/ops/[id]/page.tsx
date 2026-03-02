@@ -9,6 +9,41 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
+type OutboxItem = { id: string; kind: "start" | "finish"; opId: string; createdAt: number };
+
+function loadOutbox(): OutboxItem[] {
+  try { return JSON.parse(localStorage.getItem("outbox_ops") ?? "[]"); } catch { return []; }
+}
+function saveOutbox(items: OutboxItem[]) {
+  localStorage.setItem("outbox_ops", JSON.stringify(items));
+}
+function pushOutbox(item: OutboxItem) {
+  const items = loadOutbox();
+  items.push(item);
+  saveOutbox(items);
+}
+async function flushOutbox() {
+  const items = loadOutbox();
+  if (!items.length) return { ok: true, done: 0, left: 0 };
+
+  const keep: OutboxItem[] = [];
+  let done = 0;
+
+  for (const it of items) {
+    try {
+      const url = `/api/production-orders/${it.opId}/${it.kind === "start" ? "start" : "finish"}`;
+      const res = await fetch(url, { method: "POST" });
+      if (!res.ok) throw new Error("fail");
+      done++;
+    } catch {
+      keep.push(it);
+    }
+  }
+
+  saveOutbox(keep);
+  return { ok: keep.length === 0, done, left: keep.length };
+}
+
 async function fetchOp(id: string) {
   const res = await fetch(`/api/production-orders/${id}`, { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
@@ -58,6 +93,23 @@ export default function OpDetailPage() {
   const id = String((params as any)?.id ?? "");
   const qc = useQueryClient();
   const [msg, setMsg] = React.useState<string | null>(null);
+  const [isOnline, setIsOnline] = React.useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
+
+  React.useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+
+    // tenta sincronizar ao voltar online
+    flushOutbox().then((r) => { if (r.done > 0) setMsg(`Sincronizado: ${r.done} acao(oes).`); });
+
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
 
   const opQ = useQuery({
     queryKey: ["op", id],
@@ -134,7 +186,7 @@ export default function OpDetailPage() {
         <div>
           <h1 className="text-2xl font-bold">OP {op.id}</h1>
           <div className="mt-1 flex items-center gap-2">
-            <Badge status={status} />
+            <Badge status={status} />{!isOnline ? <span className="ml-2 inline-flex items-center rounded px-2 py-1 text-xs font-medium bg-red-100 text-red-800">OFFLINE</span> : null}
             {orderId ? (
               <Link href={`/pedidos/${orderId}`} className="text-sm underline text-muted-foreground">
                 Ver pedido
@@ -146,9 +198,10 @@ export default function OpDetailPage() {
 
         <div className="flex gap-2">
           <Button
-            disabled={startMut.isPending || !canStart}
+            disabled={startMut.isPending || !canStart || !isOnline}
             onClick={() => {
               if (!confirm("Iniciar esta OP?")) return;
+              if (!isOnline) { pushOutbox({ id: `op_${Date.now()}`, kind: "start", opId: id, createdAt: Date.now() }); setMsg("Offline: acao salva para sincronizar."); return; }
               startMut.mutate();
             }}
           >
@@ -156,10 +209,11 @@ export default function OpDetailPage() {
           </Button>
 
           <Button
-            disabled={finishMut.isPending || !canFinish}
+            disabled={finishMut.isPending || !canFinish || !isOnline}
             variant="secondary"
             onClick={() => {
               if (!confirm("Finalizar esta OP? Isso vai consumir materiais do estoque.")) return;
+              if (!isOnline) { pushOutbox({ id: `op_${Date.now()}`, kind: "finish", opId: id, createdAt: Date.now() }); setMsg("Offline: acao salva para sincronizar."); return; }
               finishMut.mutate();
             }}
           >
@@ -246,4 +300,6 @@ export default function OpDetailPage() {
     </div>
   );
 }
+
+
 
