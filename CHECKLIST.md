@@ -35,6 +35,7 @@
 - [x] Audit no PO: PO_SENT e PO_RECEIVED gravando payload + userAgent/ip
 
 ### Cadastros/API suporte a testes
+- [x] BOM industrial: perdas global (BOM.lossPercent) + por material (BOMItem.lossPercent) + cálculo aplicado em /orders/materials e /orders/confirm (confirmado via curl 03/03/2026)
 - [x] GET /api/suppliers OK via curl (POST a confirmar)
 
 ## 🟡 Pendências / Melhorias (pra não esquecer)
