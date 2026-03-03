@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MarginReportCard } from "@/components/reports/margin-report-card";
 
 async function fetchDashboardStats() {
   const res = await fetch("/api/dashboard/stats");
@@ -71,7 +72,8 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
+<div className="space-y-6">
+      <MarginReportCard />
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Visão geral</h2>
         <p className="text-muted-foreground">
@@ -92,7 +94,7 @@ export default function DashboardPage() {
               ? card.iconAlt
               : card.icon;
           return (
-            <Card key={card.title} className="overflow-hidden">
+<Card key={card.title} className="overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {card.title}
