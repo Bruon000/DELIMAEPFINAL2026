@@ -52,6 +52,12 @@ async function deleteProduct(id: string) {
   if (!res.ok) throw new Error(data.error ?? "Erro ao remover");
   return data;
 }
+async function recalcCost(id: string) {
+  const res = await fetch(`/api/products/${id}/recalc-cost`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao recalcular custo");
+  return data;
+}
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -107,10 +113,7 @@ const recalcMut = useMutation({
     await qc.invalidateQueries({ queryKey: ["products"] });
   },
   onError: (e: any) => setMsg(e?.message ?? "Erro"),
-});},
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
-  });
-
+});
   const current: any = editing ?? form;
 
   return (
@@ -226,7 +229,10 @@ const recalcMut = useMutation({
   <Button asChild variant="outline" size="sm">
     <Link href={`/cadastros/produtos/${p.id}/bom`}>BOM</Link>
   </Button>
-  <Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
+  <Button variant="outline" size="sm" onClick={() => recalcMut.mutate(p.id)} disabled={recalcMut.isPending}>
+  {recalcMut.isPending ? "Recalculando..." : "Recalcular custo (BOM)"}
+</Button>
+<Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
   <Button variant="destructive" size="sm" onClick={() => delMut.mutate(p.id)} disabled={delMut.isPending}>Remover</Button>
 </div>
             </div>
