@@ -233,7 +233,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 - [ ] vendas por período (base)
 - [ ] conversão orçamento→pedido (stub)
-- [ ] lucratividade por produto (base via BOM)
+- [x] lucratividade por produto (base via BOM)
 - [ ] produtividade (stub com TimeEntry)
 
 ---
