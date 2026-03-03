@@ -50,3 +50,5 @@ scripts/bootstrap-demo.js
 # local / debug
 cookies.txt
 scripts/bootstrap-demo.js
+
+*.bak
