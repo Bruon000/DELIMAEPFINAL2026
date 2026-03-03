@@ -124,24 +124,24 @@ const recalcMut = useMutation({
     setMsg("Custo recalculado via BOM!");
     await qc.invalidateQueries({ queryKey: ["products"] });
   
-const suggestMut = useMutation({
-  mutationFn: (id: string) => suggestPrice(id),
-  onSuccess: async (data: any, id: string) => {
-    const v = Number(data?.suggestedSalePrice ?? 0);
-    if (v > 0) setSuggested((prev) => ({ ...prev, [id]: v }));
-    setMsg(v > 0 ? `Sugestão gerada: R$ ${v.toFixed(2)}` : "Sugestão indisponível");
-  },
-  onError: (e: any) => setMsg(e?.message ?? "Erro"),
-});
+  const suggestMut = useMutation({
+    mutationFn: (id: string) => suggestPrice(id),
+    onSuccess: (data: any, id: string) => {
+      const v = Number(data?.suggestedSalePrice ?? 0);
+      if (v > 0) setSuggested((prev) => ({ ...prev, [id]: v }));
+      setMsg(v > 0 ? `Sugestão gerada: R$ ${v.toFixed(2)}` : "Sugestão indisponível");
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
 
-const applySuggestMut = useMutation({
-  mutationFn: async ({ id, salePrice }: any) => updateProduct(id, { salePrice }),
-  onSuccess: async () => {
-    setMsg("Preço aplicado!");
-    await qc.invalidateQueries({ queryKey: ["products"] });
-  },
-  onError: (e: any) => setMsg(e?.message ?? "Erro"),
-});
+  const applySuggestMut = useMutation({
+    mutationFn: async ({ id, salePrice }: any) => updateProduct(id, { salePrice }),
+    onSuccess: async () => {
+      setMsg("Preço aplicado!");
+      await qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
 },
   onError: (e: any) => setMsg(e?.message ?? "Erro"),
 });
@@ -260,17 +260,21 @@ const applySuggestMut = useMutation({
   <Button asChild variant="outline" size="sm">
     <Link href={`/cadastros/produtos/${p.id}/bom`}>BOM</Link>
   </Button>
-  <Button variant="outline" size="sm" onClick={() => recalcMut.mutate(p.id)} disabled={recalcMut.isPending}>
-  {recalcMut.isPending ? "Recalculando..." : "Recalcular custo (BOM)"}
-</Button>
-<Button variant="outline" size="sm" onClick={() => suggestMut.mutate(p.id)} disabled={suggestMut.isPending}>
-  {suggestMut.isPending ? "Sugerindo..." : "Sugerir preço (BOM)"}
+  <Button variant="outline" size="sm" onClick={() => suggestMut.mutate(p.id)} disabled={suggestMut.isPending}>
+  {suggestMut.isPending ? "Sugerindo..." : "Sugerir preço"}
 </Button>
 {suggested[p.id] ? (
-  <Button variant="outline" size="sm" onClick={() => applySuggestMut.mutate({ id: p.id, salePrice: suggested[p.id] })} disabled={applySuggestMut.isPending}>
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={() => applySuggestMut.mutate({ id: p.id, salePrice: suggested[p.id] })}
+    disabled={applySuggestMut.isPending}
+  >
     {applySuggestMut.isPending ? "Aplicando..." : `Aplicar (R$ ${suggested[p.id].toFixed(2)})`}
   </Button>
-) : null}
+) : null}<Button variant="outline" size="sm" onClick={() => recalcMut.mutate(p.id)} disabled={recalcMut.isPending}>
+  {recalcMut.isPending ? "Recalculando..." : "Recalcular custo (BOM)"}
+</Button>
 <Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
   <Button variant="destructive" size="sm" onClick={() => delMut.mutate(p.id)} disabled={delMut.isPending}>Remover</Button>
 </div>
