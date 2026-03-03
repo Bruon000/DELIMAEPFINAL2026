@@ -92,11 +92,22 @@ export default function ProdutosPage() {
   });
 
   const delMut = useMutation({
-    mutationFn: deleteProduct,
-    onSuccess: async () => {
-      setMsg("Produto removido!");
-      await qc.invalidateQueries({ queryKey: ["products"] });
-    },
+  mutationFn: deleteProduct,
+  onSuccess: async () => {
+    setMsg("Produto removido!");
+    await qc.invalidateQueries({ queryKey: ["products"] });
+  },
+  onError: (e: any) => setMsg(e?.message ?? "Erro"),
+});
+
+const recalcMut = useMutation({
+  mutationFn: (id: string) => recalcCost(id),
+  onSuccess: async () => {
+    setMsg("Custo recalculado via BOM!");
+    await qc.invalidateQueries({ queryKey: ["products"] });
+  },
+  onError: (e: any) => setMsg(e?.message ?? "Erro"),
+});},
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
