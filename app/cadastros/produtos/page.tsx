@@ -86,10 +86,9 @@ export default function ProdutosPage() {
   const [form, setForm] = React.useState({ name: "", code: "", salePrice: 0, costPrice: 0, type: "COMPOSTO" });
   const [editing, setEditing] = React.useState<Product | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
-
-  
   const [suggested, setSuggested] = React.useState<Record<string, number>>({});
-const createMut = useMutation({
+
+  const createMut = useMutation({
     mutationFn: createProduct,
     onSuccess: async () => {
       setMsg("Produto criado!");
@@ -110,20 +109,23 @@ const createMut = useMutation({
   });
 
   const delMut = useMutation({
-  mutationFn: deleteProduct,
-  onSuccess: async () => {
-    setMsg("Produto removido!");
-    await qc.invalidateQueries({ queryKey: ["products"] });
-  },
-  onError: (e: any) => setMsg(e?.message ?? "Erro"),
-});
+    mutationFn: deleteProduct,
+    onSuccess: async () => {
+      setMsg("Produto removido!");
+      await qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
 
-const recalcMut = useMutation({
-  mutationFn: (id: string) => recalcCost(id),
-  onSuccess: async () => {
-    setMsg("Custo recalculado via BOM!");
-    await qc.invalidateQueries({ queryKey: ["products"] });
-  
+  const recalcMut = useMutation({
+    mutationFn: (id: string) => recalcCost(id),
+    onSuccess: async () => {
+      setMsg("Custo recalculado via BOM!");
+      await qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
+
   const suggestMut = useMutation({
     mutationFn: (id: string) => suggestPrice(id),
     onSuccess: (data: any, id: string) => {
@@ -142,9 +144,7 @@ const recalcMut = useMutation({
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
-},
-  onError: (e: any) => setMsg(e?.message ?? "Erro"),
-});
+
   const current: any = editing ?? form;
 
   return (
