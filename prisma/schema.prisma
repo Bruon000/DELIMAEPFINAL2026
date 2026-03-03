@@ -34,12 +34,15 @@ model Company {
   units               UnitOfMeasure[]
   financialCategories FinancialCategory[]
   costCenters         CostCenter[]
-  fiscalConfig        FiscalConfig?
-  pricingConfig        PricingConfig?
-  notifications       Notification[]
-  auditLogs           AuditLog[]
-  apiKeys             ApiKey[]
-  purchaseOrders      PurchaseOrder[]
+  fiscalConfig        FiscalConfig?
+
+  pricingConfig  PricingConfig?
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  apiKeys        ApiKey[]
+  purchaseOrders PurchaseOrder[]
+
+  productPricingRules ProductPricingRule[]
 }
 
 model CompanyTheme {
@@ -54,26 +57,46 @@ model CompanyTheme {
   updatedAt      DateTime @updatedAt
 }
 
+model PricingConfig {
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  defaultMode          PricingMode @default(MARGIN) // regra principal
+  defaultMarginPercent Decimal     @default(30) @db.Decimal(5, 2) // usado em MARGIN
+  defaultMarkupPercent Decimal     @default(0) @db.Decimal(5, 2) // usado em MARKUP quando produto.markup=0
 
-  model PricingConfig {
-    id                   String        @id @default(cuid())
-    companyId             String        @unique
-    company               Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rounding PriceRounding @default(R99) // R99 (.99), R05 (0.50), NONE (2 casas)
 
-    defaultMode           PricingMode   @default(MARGIN) // regra principal
-    defaultMarginPercent  Decimal       @db.Decimal(5, 2) @default(30) // usado em MARGIN
-    defaultMarkupPercent  Decimal       @db.Decimal(5, 2) @default(0)  // usado em MARKUP quando produto.markup=0
+  minMarginPercent Decimal? @db.Decimal(5, 2) // trava premium: margem mínima
+  overheadPercent  Decimal? @db.Decimal(5, 2) // custos indiretos (produção, energia, etc.)
+  feesPercent      Decimal? @db.Decimal(5, 2) // taxas (cartão, marketplace, etc.)
 
-    rounding              PriceRounding @default(R99) // R99 (.99), R05 (0.50), NONE (2 casas)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
-    minMarginPercent      Decimal?      @db.Decimal(5, 2) // trava premium: margem mínima
-    overheadPercent       Decimal?      @db.Decimal(5, 2) // custos indiretos (produção, energia, etc.)
-    feesPercent           Decimal?      @db.Decimal(5, 2) // taxas (cartão, marketplace, etc.)
+model ProductPricingRule {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-    createdAt             DateTime      @default(now())
-    updatedAt             DateTime      @updatedAt
-  }
+  productId String  @unique
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  mode     PricingMode
+  rounding PriceRounding
+
+  marginPercent Decimal? @db.Decimal(5, 2)
+  markupPercent Decimal? @db.Decimal(5, 2)
+
+  overheadPercent Decimal? @db.Decimal(5, 2)
+  feesPercent     Decimal? @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   companyId String
@@ -166,19 +189,20 @@ model Client {
 }
 
 model Supplier {
-  id              String          @id @default(cuid())
-  companyId       String
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name            String
-  document        String?
-  email           String?
-  phone           String?
-  address         String?
-  isActive        Boolean         @default(true)
-  deletedAt       DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  purchaseOrders  PurchaseOrder[]
+  id             String          @id @default(cuid())
+  companyId      String
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
+  document       String?
+  email          String?
+  phone          String?
+  address        String?
+  isActive       Boolean         @default(true)
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+
   tradeName       String?
   ie              String?
   im              String?
@@ -239,24 +263,25 @@ model Material {
 }
 
 model Product {
-  id          String        @id @default(cuid())
+  pricingRule ProductPricingRule?
+  id          String              @id @default(cuid())
   companyId   String
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   categoryId  String?
-  category    Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category    Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   unitId      String
-  unit        UnitOfMeasure @relation(fields: [unitId], references: [id])
+  unit        UnitOfMeasure       @relation(fields: [unitId], references: [id])
   code        String?
   name        String
   description String?
-  type        ProductType   @default(SIMPLE) // SIMPLE, COMPOSTO, SOB_MEDIDA
-  salePrice   Decimal       @default(0) @db.Decimal(15, 4)
-  costPrice   Decimal?      @db.Decimal(15, 4) // calculado via BOM
-  markup      Decimal?      @db.Decimal(8, 2) // % margem
-  isActive    Boolean       @default(true)
+  type        ProductType         @default(SIMPLE) // SIMPLE, COMPOSTO, SOB_MEDIDA
+  salePrice   Decimal             @default(0) @db.Decimal(15, 4)
+  costPrice   Decimal?            @db.Decimal(15, 4) // calculado via BOM
+  markup      Decimal?            @db.Decimal(8, 2) // % margem
+  isActive    Boolean             @default(true)
   deletedAt   DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   bom                  BOM?
   orderItems           OrderItem[]
@@ -269,18 +294,17 @@ enum ProductType {
   SOB_MEDIDA
 }
 
+enum PricingMode {
+  MARKUP
+  MARGIN
+}
 
+enum PriceRounding {
+  R99
+  R05
+  NONE
+}
 
-  enum PricingMode {
-    MARKUP
-    MARGIN
-  }
-
-  enum PriceRounding {
-    R99
-    R05
-    NONE
-  }
 model BOM {
   id          String   @id @default(cuid())
   productId   String   @unique
@@ -299,10 +323,10 @@ model BOMItem {
   materialId String
   material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
   quantity   Decimal  @db.Decimal(15, 4)
-  
+
   lossPercent Decimal? @db.Decimal(5, 2) // % perda por material (corte/sobra)
-createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([bomId, materialId])
 }
