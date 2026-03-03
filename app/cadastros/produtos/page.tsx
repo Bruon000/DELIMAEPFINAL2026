@@ -107,9 +107,60 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export default function ProdutosPage() {
+  const autoLoadedRef = React.useRef<Record<string, boolean>>({});
+  const markDirty = (id: string) => setPricingDirty((prev) => ({ ...prev, [id]: true }));
   const qc = useQueryClient();
   const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
 
+  // AUTO-LOAD pricing-rule: ao carregar produtos, busca regra salva (sem sobrescrever edição manual)
+  React.useEffect(() => {
+    if (!products || !Array.isArray(products)) return;
+
+    (async () => {
+      for (const p of products) {
+        const id = String(p?.id ?? "");
+        if (!id) continue;
+
+        // já carregou uma vez? não repete
+        if (autoLoadedRef.current[id]) continue;
+
+        // usuário já mexeu nos campos? não sobrescreve
+        if (pricingDirtyRef.current[id]) {
+          autoLoadedRef.current[id] = true;
+          continue;
+        }
+
+        // já tem config no state? não sobrescreve
+        const existing = pricingRef.current[id];
+        if (existing && Object.keys(existing).length > 0) {
+          autoLoadedRef.current[id] = true;
+          continue;
+        }
+
+        try {
+          const rule = await loadPricingRule(id);
+          autoLoadedRef.current[id] = true;
+
+          if (!rule) continue;
+
+          setPricing((prev) => ({
+            ...prev,
+            [id]: {
+              mode: rule.mode,
+              rounding: rule.rounding,
+              overheadPercent: Number(rule.overheadPercent ?? 0),
+              feesPercent: Number(rule.feesPercent ?? 0),
+              marginPercent: Number(rule.marginPercent ?? 0),
+              markupPercent: Number(rule.markupPercent ?? 0),
+            },
+          }));
+        } catch {
+          // silencioso: não trava a tela se a regra não existir / der erro
+          autoLoadedRef.current[id] = true;
+        }
+      }
+    })();
+  }, [products]);
   const [form, setForm] = React.useState({ name: "", code: "", salePrice: 0, costPrice: 0, type: "COMPOSTO" });
   const [editing, setEditing] = React.useState<Product | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
@@ -117,7 +168,11 @@ export default function ProdutosPage() {
   
   const [suggestInfo, setSuggestInfo] = React.useState<Record<string, any>>({});
 const [pricing, setPricing] = React.useState<Record<string, any>>({});
-
+  const [pricingDirty, setPricingDirty] = React.useState<Record<string, boolean>>({});
+  React.useEffect(() => { pricingRef.current = pricing; }, [pricing]);
+  React.useEffect(() => { pricingDirtyRef.current = pricingDirty; }, [pricingDirty]);
+  const pricingRef = React.useRef<Record<string, any>>({});
+  const pricingDirtyRef = React.useRef<Record<string, boolean>>({});
   const createMut = useMutation({
     mutationFn: createProduct,
     onSuccess: async () => {
@@ -191,7 +246,15 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
   const loadRuleMut = useMutation({
     mutationFn: (id: string) => loadPricingRule(id),
     onSuccess: (rule: any, id: string) => {
-      if (!rule) return setMsg("Sem regra salva nesse produto.");
+      
+      // se o usuário já mexeu nos campos desse produto, não sobrescreve
+      const already = pricing[id];
+      if (already && Object.keys(already).length > 0) {
+        setMsg("Já existe edição nos campos. Use 'Carregar regra' se quiser sobrescrever.");
+        return;
+      }
+
+if (!rule) return setMsg("Sem regra salva nesse produto.");
       setPricing((prev) => ({
         ...prev,
         [id]: {
@@ -218,7 +281,7 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Produtos</h1>
-        <Button asChild variant="outline">
+<Button asChild variant="outline">
           <Link href="/cadastros">Voltar</Link>
         </Button>
       </div>
@@ -278,7 +341,11 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
             </Field>
 
             <Field label="Tipo" hint="COMPOSTO usa BOM; SIMPLES não usa BOM.">
-              <select
+              <div className="text-xs text-muted-foreground mb-1">
+  <b>Regra de preço:</b> escolha <b>MARGIN</b> (margem sobre o preço) ou <b>MARKUP</b> (acréscimo sobre o custo).
+  <span className="ml-1">Over/Fee ajustam o custo antes do cálculo. “Sugerir preço” só funciona se % obrigatória estiver preenchida.</span>
+</div>
+<select
                 className="border rounded p-2 w-full"
                 value={String(current.type ?? "COMPOSTO")}
                 onChange={(e) => {
@@ -329,8 +396,9 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
   </Button>
   <select
   className="border rounded p-2 text-sm"
+  title="MARGIN = margem % sobre o preço final | MARKUP = % sobre o custo"
   value={pricing[p.id]?.mode ?? "MARGIN"}
-  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), mode: e.target.value } }))}
+  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), mode: e.target.value } })); markDirty(p.id); }}
 >
   <option value="MARGIN">MARGIN</option>
   <option value="MARKUP">MARKUP</option>
@@ -338,8 +406,9 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
 
 <select
   className="border rounded p-2 text-sm"
+  title="Arredondamento do preço: .99 | múltiplos de 0,50 | normal (2 casas)"
   value={pricing[p.id]?.rounding ?? "R99"}
-  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), rounding: e.target.value } }))}
+  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), rounding: e.target.value } })); markDirty(p.id); }}
 >
   <option value="R99">.99</option>
   <option value="R05">0,50</option>
@@ -350,18 +419,18 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
   className="w-24"
   type="number"
   step="0.01"
-  placeholder="% over"
+  placeholder="% over" title="Overhead (%): custos indiretos antes do cálculo (produção, energia, perdas gerais, etc.)"
   value={Number(pricing[p.id]?.overheadPercent ?? 0)}
-  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), overheadPercent: Number(e.target.value) } }))}
+  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), overheadPercent: Number(e.target.value) } })); markDirty(p.id); }}
  />
 
 <Input
   className="w-24"
   type="number"
   step="0.01"
-  placeholder="% taxas"
+  placeholder="% taxas" title="Fees (%): taxas antes do cálculo (cartão, marketplace, etc.)"
   value={Number(pricing[p.id]?.feesPercent ?? 0)}
-  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), feesPercent: Number(e.target.value) } }))}
+  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), feesPercent: Number(e.target.value) } })); markDirty(p.id); }}
  />
 
 {(pricing[p.id]?.mode ?? "MARGIN") === "MARGIN" ? (
@@ -369,18 +438,18 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     className="w-24"
     type="number"
     step="0.01"
-    placeholder="% margem"
+    placeholder="% margem" title="Margem (%): lucro como % do preço. Ex: 30% => preço = custo/(1-0,30)"
     value={Number(pricing[p.id]?.marginPercent ?? 30)}
-    onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), marginPercent: Number(e.target.value) } }))}
+    onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), marginPercent: Number(e.target.value) } })); markDirty(p.id); }}
   />
 ) : null}{(pricing[p.id]?.mode ?? "MARGIN") === "MARKUP" ? (
   <Input
     className="w-24"
     type="number"
     step="0.01"
-    placeholder="% markup"
+    placeholder="% markup" title="Markup (%): acréscimo sobre custo. Ex: 45% => preço = custo*(1+0,45)"
     value={Number(pricing[p.id]?.markupPercent ?? 0)}
-    onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), markupPercent: Number(e.target.value) } }))}
+    onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), markupPercent: Number(e.target.value) } })); markDirty(p.id); }}
   />
 ) : null}<Button
   variant="outline"
@@ -441,7 +510,6 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
 <Button
   variant="outline"
   size="sm"
-  onClick={() => loadRuleMut.mutate(p.id)}
   disabled={loadRuleMut.isPending}
 >
   {loadRuleMut.isPending ? "Carregando..." : "Carregar regra"}
