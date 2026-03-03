@@ -71,6 +71,31 @@ async function suggestPrice(id: string, payload: any) {
   return data;
 }
 
+async function loadPricingRule(id: string) {
+  const res = await fetch(`/api/products/${id}/pricing-rule`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao carregar regra");
+  return data.pricingRule ?? null;
+}
+
+async function savePricingRule(id: string, payload: any) {
+  const res = await fetch(`/api/products/${id}/pricing-rule`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao salvar regra");
+  return data.pricingRule ?? null;
+}
+
+async function deletePricingRule(id: string) {
+  const res = await fetch(`/api/products/${id}/pricing-rule`, { method: "DELETE" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao remover regra");
+  return data;
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -150,13 +175,45 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     onSuccess: async () => {
       setMsg("Preço aplicado!");
       await qc.invalidateQueries({ queryKey: ["products"] });
+},
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
+
+  const saveRuleMut = useMutation({
+    mutationFn: ({ id, payload }: any) => savePricingRule(id, payload),
+    onSuccess: async () => {
+      setMsg("Regra salva!");
+      await qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
+  const loadRuleMut = useMutation({
+    mutationFn: (id: string) => loadPricingRule(id),
+    onSuccess: (rule: any, id: string) => {
+      if (!rule) return setMsg("Sem regra salva nesse produto.");
+      setPricing((prev) => ({
+        ...prev,
+        [id]: {
+          mode: rule.mode,
+          rounding: rule.rounding,
+          overheadPercent: Number(rule.overheadPercent ?? 0),
+          feesPercent: Number(rule.feesPercent ?? 0),
+          marginPercent: Number(rule.marginPercent ?? 30),
+          markupPercent: Number(rule.markupPercent ?? 0),
+        },
+      }));
+      setMsg("Regra carregada!");
+    },
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
 
+  const clearRuleMut = useMutation({
+    mutationFn: (id: string) => deletePricingRule(id),
+    onSuccess: () => setMsg("Regra removida!"),
+    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+  });
   const current: any = editing ?? form;
-
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -355,6 +412,48 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
 })()}
 >
   {suggestMut.isPending ? "Sugerindo..." : "Sugerir preço"}
+</Button>
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    const cfg = pricing[p.id] ?? {};
+    const mode = cfg.mode ?? "MARGIN";
+    const rounding = cfg.rounding ?? "R99";
+
+    const payload: any = {
+      mode,
+      rounding,
+      overheadPercent: Number(cfg.overheadPercent ?? 0),
+      feesPercent: Number(cfg.feesPercent ?? 0),
+    };
+
+    if (mode === "MARGIN") payload.marginPercent = Number(cfg.marginPercent ?? 0);
+    else payload.markupPercent = Number(cfg.markupPercent ?? 0);
+
+    saveRuleMut.mutate({ id: p.id, payload });
+  }}
+  disabled={saveRuleMut.isPending}
+>
+  {saveRuleMut.isPending ? "Salvando..." : "Salvar regra"}
+</Button>
+
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() => loadRuleMut.mutate(p.id)}
+  disabled={loadRuleMut.isPending}
+>
+  {loadRuleMut.isPending ? "Carregando..." : "Carregar regra"}
+</Button>
+
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() => clearRuleMut.mutate(p.id)}
+  disabled={clearRuleMut.isPending}
+>
+  {clearRuleMut.isPending ? "Removendo..." : "Limpar regra"}
 </Button>
 {suggestInfo[p.id] ? (
   <div className="text-xs text-muted-foreground px-1">
