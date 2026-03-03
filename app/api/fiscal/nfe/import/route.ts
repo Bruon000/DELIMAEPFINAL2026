@@ -15,14 +15,18 @@ function asArray<T>(x: any): T[] {
 export async function POST(req: Request) {
   try {
   const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!session?.user) {
+    return NextResponse.json({ ok: false, error: "unauthorized", message: "Não autorizado" }, { status: 401 });
+  }
 
   const companyId = session.user.companyId as string;
   const userId = session.user.id as string;
 
   const body = await req.json().catch(() => null);
   const xml = String(body?.xml ?? "");
-  if (!xml || xml.length < 50) return NextResponse.json({ error: "xml_required" }, { status: 400 });
+  if (!xml || xml.length < 50) {
+    return NextResponse.json({ ok: false, error: "xml_required", message: "XML inválido ou muito curto" }, { status: 400 });
+  }
 
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -36,32 +40,47 @@ export async function POST(req: Request) {
   let doc: any;
   try {
     doc = parser.parse(xml);
-  } catch (e: any) {
-    return NextResponse.json({ error: "xml_parse_error", message: String(e?.message ?? e) }, { status: 400 });
+  } catch (e: unknown) {
+    return NextResponse.json({ ok: false, error: "xml_parse_error", message: String((e as Error)?.message ?? e) }, { status: 400 });
   }
 
   const infNFe = doc?.nfeProc?.NFe?.infNFe ?? doc?.NFe?.infNFe ?? doc?.nfeProc?.NFe?.NFe?.infNFe;
-  if (!infNFe) return NextResponse.json({ error: "invalid_nfe_xml" }, { status: 400 });
+  if (!infNFe) {
+    return NextResponse.json({ ok: false, error: "invalid_nfe_xml", message: "XML não é uma NF-e válida" }, { status: 400 });
+  }
 
   const emit = infNFe?.emit ?? {};
   const emitCnpj = onlyDigits(emit?.CNPJ ?? emit?.CPF);
   const emitName = String(emit?.xNome ?? "Fornecedor").trim();
 
   const infId = String(infNFe?.Id ?? "");
-  const chNFe = onlyDigits(infId).slice(-44) || null;
+  let chNFe: string | null = onlyDigits(infId).slice(-44) || null;
+  if (!chNFe || chNFe.length !== 44) {
+    const chProt = onlyDigits(
+      doc?.nfeProc?.protNFe?.infProt?.chNFe ?? doc?.protNFe?.infProt?.chNFe ?? ""
+    );
+    if (chProt.length >= 44) chNFe = chProt.slice(-44);
+  }
 
   const dets = asArray<any>(infNFe?.det);
   const items = dets.map((d: any) => {
     const prod = d?.prod ?? {};
     const name = String(prod?.xProd ?? "").trim();
+    const cProd = String(prod?.cProd ?? "").trim() || null;
     const qty = n(prod?.qCom);
     const unit = String(prod?.uCom ?? "").trim() || null;
     const unitCost = n(prod?.vUnCom);
     const total = n(prod?.vProd);
-    return { name, qty, unit, unitCost, total };
+    return { name, cProd, qty, unit, unitCost, total };
   }).filter((x: any) => x.name && x.qty > 0 && x.unitCost >= 0);
 
-  if (items.length === 0) return NextResponse.json({ error: "nfe_no_items" }, { status: 400 });
+  if (items.length === 0) {
+    return NextResponse.json({ ok: false, error: "nfe_no_items", message: "NF-e sem itens válidos" }, { status: 400 });
+  }
+
+  const dhEmiRaw = infNFe?.ide?.dhEmi ? String(infNFe.ide.dhEmi) : undefined;
+  const issuedAt = dhEmiRaw && !Number.isNaN(Date.parse(dhEmiRaw)) ? new Date(dhEmiRaw) : undefined;
+  const supplierName = emitName;
 
   // DEDUPE por chave da NF-e (chNFe) usando FiscalInvoice + notas da PurchaseOrder
   if (chNFe) {
@@ -98,6 +117,17 @@ export async function POST(req: Request) {
           itemsCount = itemsCount ?? (existingPo as any).items.length;
         }
       }
+
+      await writeAuditLog({
+        companyId,
+        userId,
+        action: "NFE_IMPORT_DEDUPE",
+        entity: "PURCHASE_ORDER",
+        entityId: purchaseOrderId ?? undefined,
+        payload: { chNFe, purchaseOrderId, itemsCount: itemsCount ?? items.length, supplierName, emittedAt: dhEmiRaw },
+        ip: req.headers.get("x-forwarded-for") ?? undefined,
+        userAgent: req.headers.get("user-agent") ?? undefined,
+      });
 
       return NextResponse.json(
         {
@@ -150,53 +180,59 @@ export async function POST(req: Request) {
       select: { id: true },
     } as any);
 
-    // 3) resolver unidade (UnitOfMeasure)
-    const fallbackUnit = await tx.unitOfMeasure.findFirst({
+    // 3) resolver unidade (UnitOfMeasure): preferir code "UN" como fallback
+    const allUnits = await tx.unitOfMeasure.findMany({
       where: { companyId } as any,
       select: { id: true, code: true, name: true },
       orderBy: { createdAt: "asc" } as any,
     } as any);
+    const fallbackUnit = allUnits.find((u: { code: string }) => String(u?.code ?? "").toUpperCase() === "UN") ?? allUnits[0] ?? null;
 
     const unitCache = new Map<string, string>();
 
     async function resolveUnitId(unitCode: string | null): Promise<string> {
-      const key = String(unitCode ?? "").trim().toUpperCase() || "";
+      const raw = String(unitCode ?? "").trim();
+      const key = raw.toUpperCase() || "";
       if (key && unitCache.has(key)) return unitCache.get(key)!;
 
       if (key) {
-        const found = await tx.unitOfMeasure.findFirst({
-          where: {
-            companyId,
-            OR: [
-              { code: { equals: key, mode: "insensitive" } as any },
-              { name: { equals: key, mode: "insensitive" } as any },
-            ],
-          } as any,
+        const byCode = await tx.unitOfMeasure.findFirst({
+          where: { companyId, code: { equals: raw, mode: "insensitive" } as any } as any,
           select: { id: true },
         } as any);
-
-        if (found?.id) {
-          unitCache.set(key, found.id);
-          return found.id;
+        if (byCode?.id) {
+          unitCache.set(key, byCode.id);
+          return byCode.id;
+        }
+        const byName = await tx.unitOfMeasure.findFirst({
+          where: { companyId, name: { equals: raw, mode: "insensitive" } as any } as any,
+          select: { id: true },
+        } as any);
+        if (byName?.id) {
+          unitCache.set(key, byName.id);
+          return byName.id;
         }
       }
 
       if (fallbackUnit?.id) return fallbackUnit.id;
 
-      // Se não existir nenhuma unidade cadastrada, estoura com erro claro
       throw new Error("unit_required: cadastre ao menos 1 unidade em /cadastros/unidades (ex: UN)");
     }
-    // 3) mapear itens -> Materials (MVP por nome)
+    // 4) mapear itens -> Materials: primeiro por code (cProd), depois por nome
     for (const it of items) {
-      const mat = await tx.material.findFirst({
-        where: {
-          companyId,
-          deletedAt: null,
-          name: { equals: it.name, mode: "insensitive" } as any,
-        } as any,
-        select: { id: true },
-      } as any);
-
+      let mat: { id: string } | null = null;
+      if (it.cProd) {
+        mat = await tx.material.findFirst({
+          where: { companyId, deletedAt: null, code: it.cProd } as any,
+          select: { id: true },
+        } as any);
+      }
+      if (!mat?.id) {
+        mat = await tx.material.findFirst({
+          where: { companyId, deletedAt: null, name: { equals: it.name, mode: "insensitive" } as any } as any,
+          select: { id: true },
+        } as any);
+      }
       let materialId = mat?.id ?? null;
 
       if (!materialId) {
@@ -205,6 +241,7 @@ export async function POST(req: Request) {
             company: { connect: { id: companyId } },
             unit: { connect: { id: await resolveUnitId(it.unit) } },
             name: it.name,
+            code: it.cProd || undefined,
             currentCost: it.unitCost > 0 ? it.unitCost : 0,
           } as any,
           select: { id: true },
@@ -283,44 +320,82 @@ export async function POST(req: Request) {
       data: { status: "RECEIVED" as any, receivedAt: new Date() } as any,
     } as any);
 
-    // Registrar FiscalInvoice para dedupe futuro
+    // Registrar FiscalInvoice para dedupe futuro (race: se P2002, tratar como alreadyImported)
     if (chNFe) {
-      await tx.fiscalInvoice.create({
-        data: {
-          companyId,
-          key: chNFe,
-          type: "NF-E",
-          status: "RECEIVED",
-          payload: {
-            purchaseOrderId: po.id,
-            supplierId,
-            itemsCount: items.length,
-          },
-        } as any,
-      } as any);
+      try {
+        await tx.fiscalInvoice.create({
+          data: {
+            companyId,
+            key: chNFe,
+            type: "NF-E",
+            status: "RECEIVED",
+            issuedAt,
+            payload: {
+              purchaseOrderId: po.id,
+              supplierId,
+              itemsCount: items.length,
+            },
+          } as any,
+        } as any);
+      } catch (uniqueErr: unknown) {
+        const code = (uniqueErr as { code?: string })?.code;
+        if (code === "P2002") {
+          const existing = await tx.fiscalInvoice.findFirst({
+            where: { companyId, key: chNFe, type: "NF-E" } as any,
+            select: { id: true, payload: true },
+          } as any);
+          const payload: any = existing?.payload ?? null;
+          const purchaseOrderIdExisting = payload?.purchaseOrderId ?? null;
+          const itemsCountExisting = typeof payload?.itemsCount === "number" ? payload.itemsCount : items.length;
+          return { _dedupe: true, purchaseOrderId: purchaseOrderIdExisting, chNFe, itemsCount: itemsCountExisting };
+        }
+        throw uniqueErr;
+      }
     }
 
     return { purchaseOrderId: po.id, chNFe, supplierId, itemsCount: items.length };
   });
 
+  if ((result as { _dedupe?: boolean })._dedupe) {
+    const d = result as { _dedupe: boolean; purchaseOrderId: string | null; chNFe: string | null; itemsCount: number };
+    await writeAuditLog({
+      companyId,
+      userId,
+      action: "NFE_IMPORT_DEDUPE",
+      entity: "PURCHASE_ORDER",
+      entityId: d.purchaseOrderId ?? undefined,
+      payload: { chNFe: d.chNFe, purchaseOrderId: d.purchaseOrderId, itemsCount: d.itemsCount, supplierName, emittedAt: dhEmiRaw },
+      ip: req.headers.get("x-forwarded-for") ?? undefined,
+      userAgent: req.headers.get("user-agent") ?? undefined,
+    });
+    return NextResponse.json({
+      ok: true,
+      alreadyImported: true,
+      purchaseOrderId: d.purchaseOrderId,
+      chNFe: d.chNFe,
+      itemsCount: d.itemsCount,
+    }, { status: 200 });
+  }
+
+  const res = result as { purchaseOrderId: string; chNFe: string | null; supplierId: string; itemsCount: number };
   await writeAuditLog({
     companyId,
     userId,
     action: "NFE_IMPORTED",
     entity: "PURCHASE_ORDER",
-    entityId: result.purchaseOrderId,
-    payload: { chNFe: result.chNFe, itemsCount: result.itemsCount },
-    ip: req.headers.get("x-forwarded-for"),
-    userAgent: req.headers.get("user-agent"),
+    entityId: res.purchaseOrderId,
+    payload: { chNFe: res.chNFe, purchaseOrderId: res.purchaseOrderId, itemsCount: res.itemsCount, supplierId: res.supplierId, supplierName, emittedAt: dhEmiRaw },
+    ip: req.headers.get("x-forwarded-for") ?? undefined,
+    userAgent: req.headers.get("user-agent") ?? undefined,
   });
 
-  return NextResponse.json({ ok: true, ...result }, { status: 201 });
-  } catch (e: any) {
+  return NextResponse.json({ ok: true, ...res }, { status: 201 });
+  } catch (e: unknown) {
     console.error("NFE_IMPORT_ERROR", e);
-    const msg = String(e?.message ?? e);
+    const msg = String((e as Error)?.message ?? e);
     if (msg.startsWith("unit_required")) {
-      return NextResponse.json({ error: "unit_required", message: msg }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "unit_required", message: msg }, { status: 400 });
     }
-    return NextResponse.json({ error: "internal_error", message: msg }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "internal_error", message: msg }, { status: 500 });
   }
 }

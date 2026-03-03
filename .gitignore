@@ -56,3 +56,7 @@ scripts/bootstrap-demo.js
 # inventory dumps
 _inventario/
 
+
+# temp files
+tmp_route_before.txt
+

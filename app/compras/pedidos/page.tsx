@@ -3,6 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/erp/page-header";
@@ -40,7 +42,13 @@ async function importNfeXml(xml: string) {
     body: JSON.stringify({ xml }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message ?? data.error ?? "Erro ao importar NF-e");
+  if (!res.ok) {
+    const message =
+      res.status === 401
+        ? "Sessão expirada, faça login novamente."
+        : (data?.message ?? data?.error ?? "Erro ao importar NF-e");
+    throw { message, error: data?.error, status: res.status, data };
+  }
   return data;
 }
 
@@ -53,7 +61,6 @@ export default function ComprasPedidosPage() {
   const qc = useQueryClient();
 
   const [supplierId, setSupplierId] = React.useState("");
-  const [msg, setMsg] = React.useState<string | null>(null);
   const [isImportingNfe, setIsImportingNfe] = React.useState(false);
   const nfeFileRef = React.useRef<HTMLInputElement | null>(null);
   const [q, setQ] = React.useState("");
@@ -64,18 +71,30 @@ export default function ComprasPedidosPage() {
 
   const mut = useMutation({
     mutationFn: createPO,
-    onSuccess: async (d: any) => {
-      setMsg("Pedido de compra criado!");
+    onSuccess: async (d: { id?: string }) => {
+      toast.success("Pedido de compra criado!");
       setSupplierId("");
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       if (d?.id) window.location.href = `/compras/pedidos/${d.id}`;
     },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+    onError: (e: Error) => toast.error(e?.message ?? "Erro ao criar pedido"),
   });
+
+  function onPickNfeClick() {
+    nfeFileRef.current?.click();
+  }
 
   async function handlePickNfe(file: File | null) {
     if (!file) return;
-    setMsg(null);
+    const name = (file.name || "").toLowerCase();
+    if (!name.endsWith(".xml")) {
+      toast.error("Selecione um arquivo .xml");
+      return;
+    }
+    if (file.size < 50) {
+      toast.error("Arquivo muito pequeno. Use um XML de NF-e válido.");
+      return;
+    }
     setIsImportingNfe(true);
     try {
       const xml = await file.text();
@@ -83,25 +102,32 @@ export default function ComprasPedidosPage() {
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
 
       if (r?.alreadyImported) {
-        setMsg("NF-e já importada, abrindo pedido existente...");
+        toast.success("NF-e já importada. Abrindo pedido existente...");
       } else {
         const count = r?.itemsCount ?? "?";
-        setMsg(`NF-e importada! ${count} itens. Redirecionando...`);
+        toast.success(`NF-e importada: ${count} itens. Abrindo pedido...`);
       }
 
       if (r?.purchaseOrderId) {
         window.location.href = `/compras/pedidos/${r.purchaseOrderId}`;
       }
-    } catch (e: any) {
-      setMsg(e?.message ?? "Erro ao importar NF-e");
+    } catch (err: unknown) {
+      const e = err as { message?: string; error?: string; data?: { message?: string } };
+      const msg = e?.data?.message ?? e?.message ?? "Erro ao importar NF-e";
+      if (e?.error === "unit_required") {
+        toast.warning(msg, {
+          action: {
+            label: "Ir para Unidades",
+            onClick: () => { window.location.href = "/cadastros/unidades"; },
+          },
+        });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setIsImportingNfe(false);
       if (nfeFileRef.current) nfeFileRef.current.value = "";
     }
-  }
-
-  function onPickNfeClick() {
-    nfeFileRef.current?.click();
   }
 
 const suppliers = supData?.suppliers ?? [];
@@ -168,13 +194,37 @@ const suppliers = supData?.suppliers ?? [];
         title="Compras"
         subtitle="Pedidos de compra com status, totais e ações. Padrão visual ERP (tabela + filtros + badge)."
         actions={
-          <Link href="/cadastros/fornecedores">
-            <Button variant="secondary">Fornecedores</Button>
-          </Link>
+          <>
+            <Button
+              variant="outline"
+              type="button"
+              disabled={isImportingNfe}
+              onClick={onPickNfeClick}
+            >
+              {isImportingNfe ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Importando...
+                </>
+              ) : (
+                "Importar NF-e (XML)"
+              )}
+            </Button>
+            <Link href="/cadastros/fornecedores">
+              <Button variant="secondary">Fornecedores</Button>
+            </Link>
+          </>
         }
       />
 
-      {msg ? <p className="text-sm text-muted-foreground">{msg}</p> : null}
+      <input
+        ref={nfeFileRef}
+        type="file"
+        accept=".xml,application/xml,text/xml"
+        className="hidden"
+        aria-hidden
+        onChange={(e) => handlePickNfe(e.target.files?.[0] ?? null)}
+      />
 
       <Card>
         <CardHeader>
@@ -202,24 +252,6 @@ const suppliers = supData?.suppliers ?? [];
               >
                 {mut.isPending ? "Criando..." : "Criar pedido"}
               </Button>
-
-              <Button
-                variant="outline"
-                type="button"
-                disabled={isImportingNfe}
-                onClick={onPickNfeClick}
-                className="w-full md:w-auto"
-              >
-                {isImportingNfe ? "Importando..." : "Importar NF-e (XML)"}
-              </Button>
-
-              <input
-                ref={nfeFileRef}
-                type="file"
-                accept=".xml,application/xml,text/xml"
-                className="hidden"
-                onChange={(e) => handlePickNfe(e.target.files?.[0] ?? null)}
-              />
             </div>
           </div>
         </CardContent>
