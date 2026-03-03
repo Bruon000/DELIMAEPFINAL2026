@@ -57,12 +57,10 @@ const mainNav: NavItem[] = [
     href: "/estoque",
     icon: Package,
     children: [
-      { title: "Visão geral", href: "/estoque" },
-      { title: "Materiais", href: "/cadastros/materiais" },
+      { title: "Materiais", href: "/estoque/materiais" },
       { title: "Entradas", href: "/estoque/entradas" },
       { title: "Movimentações", href: "/estoque/movimentacoes" },
-          { title: "Compras", href: "/compras/pedidos" },
-],
+    ],
   },
 
   {

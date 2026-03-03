@@ -1,7 +1,13 @@
 import { withAuth } from "next-auth/middleware";
 
+/**
+ * API retorna 401 JSON; páginas redirecionam para /login.
+ * - /api/** não passa por este middleware (excluído no matcher): rotas usam getSession() e respondem 401 JSON.
+ * - Páginas passam por withAuth: não autenticado → redirect /login; /admin exige role ADMIN.
+ * - login, _next/static, _next/image, favicon.ico também excluídos.
+ */
 export default withAuth(
-  function middleware(req) {},
+  function middleware() {},
   {
     pages: { signIn: "/login" },
     callbacks: {
@@ -20,5 +26,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: ["/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|login|_next/static|_next/image|favicon.ico).*)"],
 };

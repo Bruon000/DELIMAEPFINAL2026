@@ -429,6 +429,7 @@ enum StockMovementType {
   RECEIVED // entrada compra
   RESERVED // reserva ao confirmar pedido
   CONSUMED // baixa ao finalizar produção
+  ISSUED // saída manual
   ADJUSTMENT // ajuste manual
   RETURN
 }
@@ -699,6 +700,8 @@ model FiscalInvoice {
   payload   Json?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@unique([companyId, type, key])
 }
 
 // ========== 11) NOTIFICAÇÕES ==========
