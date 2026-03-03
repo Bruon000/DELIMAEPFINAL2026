@@ -33,6 +33,17 @@ async function createPO(payload: any) {
   return data;
 }
 
+async function importNfeXml(xml: string) {
+  const res = await fetch("/api/fiscal/nfe/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ xml }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message ?? data.error ?? "Erro ao importar NF-e");
+  return data;
+}
+
 function money(n: any) {
   const v = Number(n ?? 0);
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -43,7 +54,8 @@ export default function ComprasPedidosPage() {
 
   const [supplierId, setSupplierId] = React.useState("");
   const [msg, setMsg] = React.useState<string | null>(null);
-
+  const [isImportingNfe, setIsImportingNfe] = React.useState(false);
+  const nfeFileRef = React.useRef<HTMLInputElement | null>(null);
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState<"ALL" | "DRAFT" | "SENT" | "RECEIVED" | "CANCELED">("ALL");
 
@@ -61,7 +73,38 @@ export default function ComprasPedidosPage() {
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const suppliers = supData?.suppliers ?? [];
+  async function handlePickNfe(file: File | null) {
+    if (!file) return;
+    setMsg(null);
+    setIsImportingNfe(true);
+    try {
+      const xml = await file.text();
+      const r = await importNfeXml(xml);
+      await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+
+      if (r?.alreadyImported) {
+        setMsg("NF-e já importada, abrindo pedido existente...");
+      } else {
+        const count = r?.itemsCount ?? "?";
+        setMsg(`NF-e importada! ${count} itens. Redirecionando...`);
+      }
+
+      if (r?.purchaseOrderId) {
+        window.location.href = `/compras/pedidos/${r.purchaseOrderId}`;
+      }
+    } catch (e: any) {
+      setMsg(e?.message ?? "Erro ao importar NF-e");
+    } finally {
+      setIsImportingNfe(false);
+      if (nfeFileRef.current) nfeFileRef.current.value = "";
+    }
+  }
+
+  function onPickNfeClick() {
+    nfeFileRef.current?.click();
+  }
+
+const suppliers = supData?.suppliers ?? [];
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
     return (data?.purchaseOrders ?? []).filter((po: any) => {
@@ -151,13 +194,33 @@ export default function ComprasPedidosPage() {
               ))}
             </select>
 
-            <Button
-              disabled={!supplierId || mut.isPending}
-              onClick={() => mut.mutate({ supplierId })}
-              className="w-full md:w-auto"
-            >
-              {mut.isPending ? "Criando..." : "Criar pedido"}
-            </Button>
+            <div className="flex flex-col gap-2 md:flex-row md:justify-end">
+              <Button
+                disabled={!supplierId || mut.isPending || isImportingNfe}
+                onClick={() => mut.mutate({ supplierId })}
+                className="w-full md:w-auto"
+              >
+                {mut.isPending ? "Criando..." : "Criar pedido"}
+              </Button>
+
+              <Button
+                variant="outline"
+                type="button"
+                disabled={isImportingNfe}
+                onClick={onPickNfeClick}
+                className="w-full md:w-auto"
+              >
+                {isImportingNfe ? "Importando..." : "Importar NF-e (XML)"}
+              </Button>
+
+              <input
+                ref={nfeFileRef}
+                type="file"
+                accept=".xml,application/xml,text/xml"
+                className="hidden"
+                onChange={(e) => handlePickNfe(e.target.files?.[0] ?? null)}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
