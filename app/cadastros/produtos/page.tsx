@@ -58,6 +58,16 @@ async function recalcCost(id: string) {
   if (!res.ok) throw new Error(data.error ?? "Erro ao recalcular custo");
   return data;
 }
+async function suggestPrice(id: string) {
+  const res = await fetch(`/api/products/${id}/suggest-price`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode: "MARKUP", rounding: "99" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Erro ao sugerir preço");
+  return data;
+}
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -77,7 +87,9 @@ export default function ProdutosPage() {
   const [editing, setEditing] = React.useState<Product | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  const createMut = useMutation({
+  
+  const [suggested, setSuggested] = React.useState<Record<string, number>>({});
+const createMut = useMutation({
     mutationFn: createProduct,
     onSuccess: async () => {
       setMsg("Produto criado!");
@@ -111,7 +123,26 @@ const recalcMut = useMutation({
   onSuccess: async () => {
     setMsg("Custo recalculado via BOM!");
     await qc.invalidateQueries({ queryKey: ["products"] });
+  
+const suggestMut = useMutation({
+  mutationFn: (id: string) => suggestPrice(id),
+  onSuccess: async (data: any, id: string) => {
+    const v = Number(data?.suggestedSalePrice ?? 0);
+    if (v > 0) setSuggested((prev) => ({ ...prev, [id]: v }));
+    setMsg(v > 0 ? `Sugestão gerada: R$ ${v.toFixed(2)}` : "Sugestão indisponível");
   },
+  onError: (e: any) => setMsg(e?.message ?? "Erro"),
+});
+
+const applySuggestMut = useMutation({
+  mutationFn: async ({ id, salePrice }: any) => updateProduct(id, { salePrice }),
+  onSuccess: async () => {
+    setMsg("Preço aplicado!");
+    await qc.invalidateQueries({ queryKey: ["products"] });
+  },
+  onError: (e: any) => setMsg(e?.message ?? "Erro"),
+});
+},
   onError: (e: any) => setMsg(e?.message ?? "Erro"),
 });
   const current: any = editing ?? form;
@@ -232,6 +263,14 @@ const recalcMut = useMutation({
   <Button variant="outline" size="sm" onClick={() => recalcMut.mutate(p.id)} disabled={recalcMut.isPending}>
   {recalcMut.isPending ? "Recalculando..." : "Recalcular custo (BOM)"}
 </Button>
+<Button variant="outline" size="sm" onClick={() => suggestMut.mutate(p.id)} disabled={suggestMut.isPending}>
+  {suggestMut.isPending ? "Sugerindo..." : "Sugerir preço (BOM)"}
+</Button>
+{suggested[p.id] ? (
+  <Button variant="outline" size="sm" onClick={() => applySuggestMut.mutate({ id: p.id, salePrice: suggested[p.id] })} disabled={applySuggestMut.isPending}>
+    {applySuggestMut.isPending ? "Aplicando..." : `Aplicar (R$ ${suggested[p.id].toFixed(2)})`}
+  </Button>
+) : null}
 <Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
   <Button variant="destructive" size="sm" onClick={() => delMut.mutate(p.id)} disabled={delMut.isPending}>Remover</Button>
 </div>
