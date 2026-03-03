@@ -1,8 +1,20 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+
 export default function ConfiguracoesPage() {
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Configurações</h1>
-      <p className="text-muted-foreground mt-2">Em construção.</p>
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Configurações</h1>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="border rounded p-4 space-y-2">
+          <div className="font-medium">Preços (Premium)</div>
+          <div className="text-sm text-muted-foreground">Defina regra de sugestão (margem/markup/arredondamento).</div>
+          <Button asChild variant="outline"><Link href="/configuracoes/precos">Abrir</Link></Button>
+        </div>
+      </div>
     </div>
   );
 }

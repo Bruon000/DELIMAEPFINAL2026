@@ -34,7 +34,8 @@ model Company {
   units               UnitOfMeasure[]
   financialCategories FinancialCategory[]
   costCenters         CostCenter[]
-  fiscalConfig        FiscalConfig?
+  fiscalConfig        FiscalConfig?
+  pricingConfig        PricingConfig?
   notifications       Notification[]
   auditLogs           AuditLog[]
   apiKeys             ApiKey[]
@@ -53,6 +54,26 @@ model CompanyTheme {
   updatedAt      DateTime @updatedAt
 }
 
+
+
+  model PricingConfig {
+    id                   String        @id @default(cuid())
+    companyId             String        @unique
+    company               Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+    defaultMode           PricingMode   @default(MARGIN) // regra principal
+    defaultMarginPercent  Decimal       @db.Decimal(5, 2) @default(30) // usado em MARGIN
+    defaultMarkupPercent  Decimal       @db.Decimal(5, 2) @default(0)  // usado em MARKUP quando produto.markup=0
+
+    rounding              PriceRounding @default(R99) // R99 (.99), R05 (0.50), NONE (2 casas)
+
+    minMarginPercent      Decimal?      @db.Decimal(5, 2) // trava premium: margem mínima
+    overheadPercent       Decimal?      @db.Decimal(5, 2) // custos indiretos (produção, energia, etc.)
+    feesPercent           Decimal?      @db.Decimal(5, 2) // taxas (cartão, marketplace, etc.)
+
+    createdAt             DateTime      @default(now())
+    updatedAt             DateTime      @updatedAt
+  }
 model AuditLog {
   id        String   @id @default(cuid())
   companyId String
@@ -248,6 +269,18 @@ enum ProductType {
   SOB_MEDIDA
 }
 
+
+
+  enum PricingMode {
+    MARKUP
+    MARGIN
+  }
+
+  enum PriceRounding {
+    R99
+    R05
+    NONE
+  }
 model BOM {
   id          String   @id @default(cuid())
   productId   String   @unique

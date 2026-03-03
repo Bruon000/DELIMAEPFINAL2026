@@ -52,20 +52,22 @@ async function deleteProduct(id: string) {
   if (!res.ok) throw new Error(data.error ?? "Erro ao remover");
   return data;
 }
+
 async function recalcCost(id: string) {
   const res = await fetch(`/api/products/${id}/recalc-cost`, { method: "POST" });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "Erro ao recalcular custo");
   return data;
 }
-async function suggestPrice(id: string) {
+
+async function suggestPrice(id: string, payload: any) {
   const res = await fetch(`/api/products/${id}/suggest-price`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "MARKUP", rounding: "99" }),
+    body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao sugerir preço");
+  if (!res.ok) throw new Error(data.error ?? "missing_pricing_params");
   return data;
 }
 
@@ -87,6 +89,9 @@ export default function ProdutosPage() {
   const [editing, setEditing] = React.useState<Product | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [suggested, setSuggested] = React.useState<Record<string, number>>({});
+  
+  const [suggestInfo, setSuggestInfo] = React.useState<Record<string, any>>({});
+const [pricing, setPricing] = React.useState<Record<string, any>>({});
 
   const createMut = useMutation({
     mutationFn: createProduct,
@@ -127,11 +132,15 @@ export default function ProdutosPage() {
   });
 
   const suggestMut = useMutation({
-    mutationFn: (id: string) => suggestPrice(id),
-    onSuccess: (data: any, id: string) => {
+    mutationFn: ({ id, payload }: any) => suggestPrice(id, payload),
+    onSuccess: (data: any, vars: any) => {
+      
+      const id = String(vars?.id ?? "");
       const v = Number(data?.suggestedSalePrice ?? 0);
-      if (v > 0) setSuggested((prev) => ({ ...prev, [id]: v }));
+      if (id) setSuggestInfo((prev) => ({ ...prev, [id]: data }));
+      if (id && v > 0) setSuggested((prev) => ({ ...prev, [id]: v }));
       setMsg(v > 0 ? `Sugestão gerada: R$ ${v.toFixed(2)}` : "Sugestão indisponível");
+
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
@@ -144,6 +153,7 @@ export default function ProdutosPage() {
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
+
 
   const current: any = editing ?? form;
 
@@ -260,9 +270,102 @@ export default function ProdutosPage() {
   <Button asChild variant="outline" size="sm">
     <Link href={`/cadastros/produtos/${p.id}/bom`}>BOM</Link>
   </Button>
-  <Button variant="outline" size="sm" onClick={() => suggestMut.mutate(p.id)} disabled={suggestMut.isPending}>
+  <select
+  className="border rounded p-2 text-sm"
+  value={pricing[p.id]?.mode ?? "MARGIN"}
+  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), mode: e.target.value } }))}
+>
+  <option value="MARGIN">MARGIN</option>
+  <option value="MARKUP">MARKUP</option>
+</select>
+
+<select
+  className="border rounded p-2 text-sm"
+  value={pricing[p.id]?.rounding ?? "R99"}
+  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), rounding: e.target.value } }))}
+>
+  <option value="R99">.99</option>
+  <option value="R05">0,50</option>
+  <option value="NONE">Normal</option>
+</select>
+
+<Input
+  className="w-24"
+  type="number"
+  step="0.01"
+  placeholder="% over"
+  value={Number(pricing[p.id]?.overheadPercent ?? 0)}
+  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), overheadPercent: Number(e.target.value) } }))}
+ />
+
+<Input
+  className="w-24"
+  type="number"
+  step="0.01"
+  placeholder="% taxas"
+  value={Number(pricing[p.id]?.feesPercent ?? 0)}
+  onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), feesPercent: Number(e.target.value) } }))}
+ />
+
+{(pricing[p.id]?.mode ?? "MARGIN") === "MARGIN" ? (
+  <Input
+    className="w-24"
+    type="number"
+    step="0.01"
+    placeholder="% margem"
+    value={Number(pricing[p.id]?.marginPercent ?? 30)}
+    onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), marginPercent: Number(e.target.value) } }))}
+  />
+) : null}{(pricing[p.id]?.mode ?? "MARGIN") === "MARKUP" ? (
+  <Input
+    className="w-24"
+    type="number"
+    step="0.01"
+    placeholder="% markup"
+    value={Number(pricing[p.id]?.markupPercent ?? 0)}
+    onChange={(e) => setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), markupPercent: Number(e.target.value) } }))}
+  />
+) : null}<Button
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    const cfg = pricing[p.id] ?? {};
+    const mode = cfg.mode ?? "MARGIN";
+    const rounding = cfg.rounding ?? "R99";
+
+    const payload: any = {
+      mode,
+      rounding,
+      overheadPercent: Number(cfg.overheadPercent ?? 0),
+      feesPercent: Number(cfg.feesPercent ?? 0),
+    };
+
+    if (mode === "MARGIN") payload.marginPercent = Number(cfg.marginPercent ?? 30);
+    else payload.markupPercent = Number(cfg.markupPercent ?? 0);
+
+    suggestMut.mutate({ id: p.id, payload });
+  }}
+  disabled={suggestMut.isPending || (() => {
+  const cfg = pricing[p.id] ?? {};
+  const mode = cfg.mode ?? "MARGIN";
+  const m = Number(cfg.marginPercent ?? 0);
+  const k = Number(cfg.markupPercent ?? 0);
+  if (mode === "MARGIN") return !isFinite(m) || m <= 0;
+  return !isFinite(k) || k < 0;
+})()}
+>
   {suggestMut.isPending ? "Sugerindo..." : "Sugerir preço"}
 </Button>
+{suggestInfo[p.id] ? (
+  <div className="text-xs text-muted-foreground px-1">
+    <div><b>Custo BOM:</b> R$ {Number(suggestInfo[p.id]?.costBase ?? 0).toFixed(4)}</div>
+    <div><b>Over/Fee:</b> {Number(suggestInfo[p.id]?.overheadPercent ?? 0).toFixed(2)}% / {Number(suggestInfo[p.id]?.feesPercent ?? 0).toFixed(2)}%</div>
+    <div><b>Custo ajustado:</b> R$ {Number(suggestInfo[p.id]?.costPrice ?? 0).toFixed(4)}</div>
+    <div><b>Preço bruto:</b> R$ {Number(suggestInfo[p.id]?.rawSalePrice ?? 0).toFixed(4)} · <b>Sugerido:</b> R$ {Number(suggestInfo[p.id]?.suggestedSalePrice ?? 0).toFixed(2)}</div>
+    <div><b>Modo:</b> {String(suggestInfo[p.id]?.mode ?? "")} · <b>%</b> {suggestInfo[p.id]?.mode === "MARGIN" ? Number(suggestInfo[p.id]?.marginPercent ?? 0).toFixed(2) : Number(suggestInfo[p.id]?.markupPercent ?? 0).toFixed(2)} · <b>Round:</b> {String(suggestInfo[p.id]?.rounding ?? "")}</div>
+  </div>
+) : null}
+
 {suggested[p.id] ? (
   <Button
     variant="outline"
