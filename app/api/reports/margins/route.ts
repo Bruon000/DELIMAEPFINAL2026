@@ -40,7 +40,7 @@ export async function GET() {
   });
 
   // rankings úteis pro dashboard
-  const withPrice = rows.filter(r => r.salePrice > 0);
+  const withPrice = rows.filter(r => r.salePrice > 0 && r.costPrice > 0);
   const topMarginPct = [...withPrice].sort((a,b) => b.marginPct - a.marginPct).slice(0, 5);
   const worstMarginPct = [...withPrice].sort((a,b) => a.marginPct - b.marginPct).slice(0, 5);
 
