@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AuditTrail, type AuditRow } from "@/components/erp/audit-trail";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,17 @@ import {
 import { PageHeader } from "@/components/erp/page-header";
 import { PurchaseOrderStatusBadge } from "@/components/erp/status-badge";
 import { DataTable, type Column } from "@/components/erp/data-table";
+
+async function fetchAudit(entityId: string) {
+  const sp = new URLSearchParams();
+  sp.set("entity", "PURCHASE_ORDER");
+  sp.set("entityId", entityId);
+  sp.set("take", "80");
+  const res = await fetch(`/api/audit-logs?${sp.toString()}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? data.message ?? "Erro ao carregar auditoria");
+  return data as { rows: AuditRow[] };
+}
 
 async function fetchPO(id: string) {
   const res = await fetch(`/api/purchase-orders/${id}`);
@@ -96,6 +108,7 @@ export default function CompraDetailPage() {
 
   const poQ = useQuery({ queryKey: ["po", id], queryFn: () => fetchPO(id) });
   const matsQ = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
+  const auditQ = useQuery({ queryKey: ["audit", "PURCHASE_ORDER", id], queryFn: () => fetchAudit(id) });
 
   const po = poQ.data?.purchaseOrder;
   const items = React.useMemo(() => (po?.items ?? []) as any[], [po?.items]);
@@ -205,16 +218,34 @@ export default function CompraDetailPage() {
             <div className="font-medium">
               {it.material?.name ?? it.materialId}
             </div>
-            <Link
-              href={`/estoque/movimentacoes?materialId=${encodeURIComponent(
-                String(it.materialId)
-              )}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Button variant="outline" size="sm">
-                Ledger
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!it.materialId}
+                onClick={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!it.materialId) return toast.error("Item sem materialId.");
+                  try {
+                    await navigator.clipboard.writeText(String(it.materialId));
+                    toast.success("MaterialId copiado: " + String(it.materialId));
+                  } catch {
+                    toast.error("Não foi possível copiar para a área de transferência.");
+                  }
+                }}
+              >
+                Copiar materialId
               </Button>
-            </Link>
+              <Link
+                href={`/estoque/movimentacoes?materialId=${encodeURIComponent(String(it.materialId ?? ""))}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Button variant="outline" size="sm" disabled={!it.materialId}>
+                  Ledger
+                </Button>
+              </Link>
+            </div>
           </div>
           {it.material?.code ? (
             <div className="text-xs text-muted-foreground">
@@ -437,6 +468,29 @@ export default function CompraDetailPage() {
           canEdit ? "Adicione itens acima para enviar o pedido." : "Pedido sem itens."
         }
       />
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle>Audit Trail</CardTitle>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              toast.info("Recarregando auditoria…");
+              await qc.invalidateQueries({ queryKey: ["audit", "PURCHASE_ORDER", id] });
+            }}
+          >
+            Recarregar
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <AuditTrail
+            rows={(auditQ.data?.rows ?? []) as any}
+            isLoading={auditQ.isLoading}
+            emptyTitle="Sem eventos"
+            emptyHint="Quando ações acontecerem (import NF-e, receber, cancelar etc.), elas aparecem aqui."
+          />
+        </CardContent>
+      </Card>
 
       <Dialog
         open={confirm.open}

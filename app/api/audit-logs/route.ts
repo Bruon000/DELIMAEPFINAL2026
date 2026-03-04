@@ -12,16 +12,27 @@ export async function GET(req: Request) {
   const entity = String(url.searchParams.get("entity") ?? "");
   const entityId = String(url.searchParams.get("entityId") ?? "");
   const take = Math.min(Number(url.searchParams.get("take") ?? 50), 200);
+  const cursor = String(url.searchParams.get("cursor") ?? "").trim();
 
   if (!entity || !entityId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
 
   const rows = await prisma.auditLog.findMany({
-    where: { companyId, entity, entityId },
-    orderBy: { createdAt: "desc" },
-    take,
+    where: { companyId, entity, entityId } as any,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }] as any,
+    take: take + 1,
+    ...(cursor
+      ? {
+          cursor: { id: cursor } as any,
+          skip: 1,
+        }
+      : {}),
   } as any);
 
-  return NextResponse.json({ rows });
+  const hasMore = rows.length > take;
+  const page = hasMore ? rows.slice(0, take) : rows;
+  const nextCursor = hasMore ? page[page.length - 1]?.id ?? null : null;
+
+  return NextResponse.json({ rows: page, nextCursor });
 }

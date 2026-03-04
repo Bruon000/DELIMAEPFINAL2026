@@ -155,6 +155,7 @@ export default function EstoqueMovimentacoesPage() {
     // remove ?ref= da URL, preservando outros params se existirem
     const sp = new URLSearchParams(searchParams?.toString() ?? "");
     if (sp.has("ref")) sp.delete("ref");
+    if (sp.has("materialId")) sp.delete("materialId");
     const qs = sp.toString();
     router.replace(qs ? `/estoque/movimentacoes?${qs}` : "/estoque/movimentacoes");
     toast.info("Voltou para visão geral.");
@@ -290,6 +291,9 @@ export default function EstoqueMovimentacoesPage() {
               e.stopPropagation();
               clearRefParam();
               setMaterialId(r.materialId);
+              const sp = new URLSearchParams();
+              sp.set("materialId", String(r.materialId));
+              router.replace(`/estoque/movimentacoes?${sp.toString()}`);
               toast.info("Filtrando material: " + r.materialId);
             }}
           >
