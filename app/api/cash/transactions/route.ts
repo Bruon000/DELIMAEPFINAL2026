@@ -13,6 +13,8 @@ export async function GET(req: Request) {
   const sessionId = url.searchParams.get("sessionId");
   const q = String(url.searchParams.get("q") ?? "").trim().toLowerCase();
   const type = String(url.searchParams.get("type") ?? "").trim().toUpperCase();
+  const from = String(url.searchParams.get("from") ?? "").trim(); // YYYY-MM-DD
+  const to = String(url.searchParams.get("to") ?? "").trim(); // YYYY-MM-DD
 
   let cashSessionId = sessionId;
 
@@ -27,8 +29,12 @@ export async function GET(req: Request) {
 
   if (!cashSessionId) return NextResponse.json({ transactions: [] });
 
+  const where: any = { sessionId: cashSessionId };
+  if (from) where.createdAt = { ...(where.createdAt ?? {}), gte: new Date(from + "T00:00:00") };
+  if (to) where.createdAt = { ...(where.createdAt ?? {}), lte: new Date(to + "T23:59:59") };
+
   const transactions = await prisma.cashTransaction.findMany({
-    where: { sessionId: cashSessionId },
+    where,
     orderBy: { createdAt: "desc" },
     take: 200,
   } as any);

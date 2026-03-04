@@ -26,10 +26,12 @@ async function fetchSession() {
   return res.json();
 }
 
-async function fetchTransactions(params: { q?: string; type?: string }) {
+async function fetchTransactions(params: { q?: string; type?: string; from?: string; to?: string }) {
   const sp = new URLSearchParams();
   if (params.q) sp.set("q", params.q);
   if (params.type && params.type !== "ALL") sp.set("type", params.type);
+  if (params.from) sp.set("from", params.from);
+  if (params.to) sp.set("to", params.to);
   const res = await fetch(`/api/cash/transactions?${sp.toString()}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar transações");
@@ -88,10 +90,12 @@ export default function CaixaPage() {
 
   const [q, setQ] = React.useState("");
   const [txType, setTxType] = React.useState<"ALL" | "IN" | "OUT">("ALL");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
 
   const txQ = useQuery({
-    queryKey: ["cash-transactions", { q, txType }],
-    queryFn: () => fetchTransactions({ q: q.trim() || undefined, type: txType }),
+    queryKey: ["cash-transactions", { q, txType, from, to }],
+    queryFn: () => fetchTransactions({ q: q.trim() || undefined, type: txType, from: from || undefined, to: to || undefined }),
   });
 
   const txs = txQ.data?.transactions ?? [];
@@ -107,6 +111,11 @@ export default function CaixaPage() {
   const [newAmount, setNewAmount] = React.useState("0");
   const [newDesc, setNewDesc] = React.useState("");
   const [newRef, setNewRef] = React.useState("");
+
+  const [outOpen, setOutOpen] = React.useState(false);
+  const [outAmount, setOutAmount] = React.useState("0");
+  const [outReason, setOutReason] = React.useState("");
+  const [outRef, setOutRef] = React.useState("");
 
   const openMut = useMutation({
     mutationFn: () => openCash(openingBalance),
@@ -163,6 +172,34 @@ export default function CaixaPage() {
       await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao lançar transação"),
+  });
+
+  const outMut = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/cash/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "OUT",
+          amount: Number(outAmount ?? 0),
+          reason: outReason.trim() || undefined,
+          reference: outRef.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao registrar saída");
+      return data;
+    },
+    onSuccess: async () => {
+      toast.success("Saída registrada (OUT).");
+      setOutOpen(false);
+      setOutAmount("0");
+      setOutReason("");
+      setOutRef("");
+      await qc.invalidateQueries({ queryKey: ["cash-session"] });
+      await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao registrar saída"),
   });
 
   const sumIn = txs.filter((t: any) => t.type === "IN").reduce((s: number, t: any) => s + Number(t.amount ?? 0), 0);
@@ -227,6 +264,15 @@ export default function CaixaPage() {
               }}
             >
               Nova transação
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!cashSession) return toast.error("Abra o caixa antes de lançar transações.");
+                setOutOpen(true);
+              }}
+            >
+              Saída manual
             </Button>
           </div>
         }
@@ -294,20 +340,26 @@ export default function CaixaPage() {
             onClearAll={() => {
               setQ("");
               setTxType("ALL");
+              setFrom("");
+              setTo("");
             }}
             leftSlot={
-              <select
-                className="h-10 rounded-md border bg-background px-3 text-sm"
-                value={txType}
-                onChange={(e) => setTxType(e.target.value as any)}
-              >
-                <option value="ALL">Todos</option>
-                <option value="IN">Entradas (IN)</option>
-                <option value="OUT">Saídas (OUT)</option>
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="h-10 rounded-md border bg-background px-3 text-sm"
+                  value={txType}
+                  onChange={(e) => setTxType(e.target.value as any)}
+                >
+                  <option value="ALL">Todos</option>
+                  <option value="IN">Entradas (IN)</option>
+                  <option value="OUT">Saídas (OUT)</option>
+                </select>
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-[160px]" />
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-[160px]" />
+              </div>
             }
             rightSlot={
-              <Button variant="secondary" onClick={() => { setQ(""); setTxType("ALL"); }}>
+              <Button variant="secondary" onClick={() => { setQ(""); setTxType("ALL"); setFrom(""); setTo(""); }}>
                 Limpar filtros
               </Button>
             }
@@ -391,6 +443,39 @@ export default function CaixaPage() {
             <Button variant="outline" onClick={() => setCloseConfirmOpen(false)}>Cancelar</Button>
             <Button onClick={() => closeConfirmMut.mutate()} disabled={closeConfirmMut.isPending}>
               {closeConfirmMut.isPending ? "Fechando..." : "Confirmar e fechar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={outOpen} onOpenChange={setOutOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Saída manual (OUT)</DialogTitle>
+            <DialogDescription>
+              Registra uma saída no caixa com motivo (fica em descrição como “Motivo: ...”).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Valor</Label>
+              <Input type="number" value={outAmount} onChange={(e) => setOutAmount(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Motivo</Label>
+              <Input value={outReason} onChange={(e) => setOutReason(e.target.value)} placeholder="Ex.: combustível, entrega, material, taxa..." />
+            </div>
+            <div className="space-y-1">
+              <Label>Referência (opcional)</Label>
+              <Input value={outRef} onChange={(e) => setOutRef(e.target.value)} placeholder="Ex.: AP:..., PO:..., NFE:..." />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setOutOpen(false)}>Cancelar</Button>
+            <Button onClick={() => outMut.mutate()} disabled={outMut.isPending}>
+              {outMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -55,6 +55,17 @@ async function cancelPayable(id: string) {
   return data;
 }
 
+async function updatePayable(id: string, payload: { description?: string; amount?: number; dueDate?: string }) {
+  const res = await fetch(`/api/accounts-payable/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao atualizar");
+  return data;
+}
+
 export default function ContasPagarPage() {
   const qc = useQueryClient();
   const [q, setQ] = React.useState("");
@@ -63,6 +74,12 @@ export default function ContasPagarPage() {
   const [desc, setDesc] = React.useState("");
   const [due, setDue] = React.useState("");
   const [status, setStatus] = React.useState<"ALL" | "PENDING" | "PAID" | "OVERDUE" | "CANCELED">("ALL");
+
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editId, setEditId] = React.useState<string | null>(null);
+  const [editAmount, setEditAmount] = React.useState("0");
+  const [editDesc, setEditDesc] = React.useState("");
+  const [editDue, setEditDue] = React.useState("");
 
   const qPay = useQuery({ queryKey: ["accounts-payable"], queryFn: fetchPayables });
   const items = React.useMemo(() => {
@@ -102,12 +119,25 @@ export default function ContasPagarPage() {
     onError: (e: any) => toast.error(e?.message ?? "Erro ao cancelar"),
   });
 
+  const editMut = useMutation({
+    mutationFn: () => updatePayable(String(editId), { description: editDesc.trim() || undefined, amount: Number(editAmount ?? 0), dueDate: editDue }),
+    onSuccess: async () => {
+      toast.success("Despesa atualizada.");
+      setEditOpen(false);
+      setEditId(null);
+      await qc.invalidateQueries({ queryKey: ["accounts-payable"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao atualizar"),
+  });
+
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
     return items.filter((x: any) => {
       if (status !== "ALL" && String(x.status ?? "") !== status) return false;
       if (!needle) return true;
-      return String(x.description ?? "").toLowerCase().includes(needle);
+      const desc = String(x.description ?? "").toLowerCase();
+      const id = String(x.id ?? "").toLowerCase();
+      return desc.includes(needle) || id.includes(needle);
     });
   }, [items, q, status]);
 
@@ -125,10 +155,29 @@ export default function ContasPagarPage() {
     {
       key: "actions",
       header: "",
-      headerClassName: "w-[160px]",
+      headerClassName: "w-[240px]",
       className: "text-right",
       cell: (r) => (
         <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditId(r.id);
+              setEditDesc(String(r.description ?? ""));
+              setEditAmount(String(Number(r.amount ?? 0)));
+              // date input precisa YYYY-MM-DD
+              const d = r.dueDate ? new Date(r.dueDate) : null;
+              const yyyy = d ? String(d.getFullYear()).padStart(4, "0") : "";
+              const mm = d ? String(d.getMonth() + 1).padStart(2, "0") : "";
+              const dd = d ? String(d.getDate()).padStart(2, "0") : "";
+              setEditDue(d ? `${yyyy}-${mm}-${dd}` : "");
+              setEditOpen(true);
+            }}
+          >
+            Editar
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -239,6 +288,39 @@ export default function ContasPagarPage() {
               disabled={createMut.isPending}
             >
               {createMut.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar despesa</DialogTitle>
+            <DialogDescription>
+              Atualiza descrição, valor e vencimento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Descrição</Label>
+              <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Valor</Label>
+              <Input type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Vencimento</Label>
+              <Input type="date" value={editDue} onChange={(e) => setEditDue(e.target.value)} />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+            <Button onClick={() => editMut.mutate()} disabled={editMut.isPending || !editId}>
+              {editMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
