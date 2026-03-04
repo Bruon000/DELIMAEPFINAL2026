@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+
 import { PageHeader } from "@/components/erp/page-header";
 import { FiltersBar as FiltersShell } from "@/components/erp/filters-shell";
 import { DataTable, type Column } from "@/components/erp/data-table";
@@ -40,6 +42,14 @@ export default function EstoqueCriticoPage() {
     queryKey: ["stock-critical", q, mode],
     queryFn: () => fetchCritical(q, mode),
   });
+
+  React.useEffect(() => {
+    if (error) {
+      const msg = (error as any)?.message ?? "Erro ao carregar estoque crítico";
+      toast.error(msg);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
 
   const rows = data?.rows ?? [];
 

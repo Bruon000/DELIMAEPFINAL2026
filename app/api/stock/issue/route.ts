@@ -1,16 +1,12 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
 function n(x: any) { return Number(x ?? 0); }
 
-export async function POST(req: NextRequest) {
-  // tenta ler sessão com req (compat), e cai no modo antigo se necessário
-  const session =
-    (await (getSession as any)(req).catch(() => null)) ??
-    (await (getSession as any)().catch(() => null));
-
+export async function POST(req: Request) {
+  const session = await getSession();
   if (!session?.user) {
     return NextResponse.json(
       { ok: false, error: "unauthorized", message: "Sessão expirada. Faça login novamente." },
@@ -30,7 +26,10 @@ export async function POST(req: NextRequest) {
   const reason = String(body?.reason ?? "").trim() || null;
 
   if (!materialId || qty <= 0) {
-    return NextResponse.json({ ok: false, error: "invalid_input", message: "materialId e quantity (>0) são obrigatórios" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "invalid_input", message: "materialId e quantity (>0) são obrigatórios" },
+      { status: 400 },
+    );
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -72,7 +71,9 @@ export async function POST(req: NextRequest) {
   });
 
   if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error, message: result.message }, { status: 400 });
+    // conflito de negócio (estoque insuficiente) -> 409
+    const status = result.error === "insufficient_stock" ? 409 : 400;
+    return NextResponse.json({ ok: false, error: result.error, message: result.message }, { status });
   }
 
   await writeAuditLog({
@@ -86,5 +87,6 @@ export async function POST(req: NextRequest) {
     userAgent: req.headers.get("user-agent"),
   });
 
+  // result já contém ok:true
   return NextResponse.json(result, { status: 201 });
 }

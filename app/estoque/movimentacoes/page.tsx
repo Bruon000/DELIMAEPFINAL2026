@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -144,6 +145,14 @@ export default function EstoqueMovimentacoesPage() {
     getNextPageParam: (last) => last?.nextCursor ?? null,
   });
 
+  React.useEffect(() => {
+    if (ledgerQ.isError) {
+      const msg = (ledgerQ.error as any)?.message ?? "Erro ao carregar movimentações";
+      toast.error(msg);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ledgerQ.isError]);
+
   const rows = React.useMemo(() => {
     const pages = ledgerQ.data?.pages ?? [];
     return pages.flatMap((p) => p?.rows ?? []);
@@ -152,19 +161,27 @@ export default function EstoqueMovimentacoesPage() {
   const issueMut = useMutation({
     mutationFn: postIssue,
     onSuccess: async () => {
+      toast.success("Saída registrada (ISSUED).");
       await qc.invalidateQueries({ queryKey: ["stock-ledger"] });
       setIssueOpen(false);
       // refresh current query
       await qc.invalidateQueries({ queryKey });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Erro ao dar saída");
     },
   });
 
   const adjustMut = useMutation({
     mutationFn: postInventoryAdjust,
     onSuccess: async () => {
+      toast.success("Ajuste registrado (ADJUSTMENT).");
       await qc.invalidateQueries({ queryKey: ["stock-ledger"] });
       setAdjustOpen(false);
       await qc.invalidateQueries({ queryKey });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Erro ao ajustar inventário");
     },
   });
 

@@ -7,7 +7,12 @@ function n(x: any) { return Number(x ?? 0); }
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session?.user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!session?.user) {
+    return NextResponse.json(
+      { ok: false, error: "unauthorized", message: "Sessão expirada. Faça login novamente." },
+      { status: 401 },
+    );
+  }
 
   const companyId = session.user.companyId as string;
   const userId = session.user.id as string;
@@ -20,7 +25,10 @@ export async function POST(req: Request) {
   const note = String(body?.note ?? "").trim() || "Ajuste de inventário";
 
   if (!materialId || newQuantity < 0) {
-    return NextResponse.json({ ok: false, error: "invalid_input", message: "materialId e newQuantity (>=0) são obrigatórios" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "invalid_input", message: "materialId e newQuantity (>=0) são obrigatórios" },
+      { status: 400 },
+    );
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -58,7 +66,9 @@ export async function POST(req: Request) {
   });
 
   if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error, message: result.message }, { status: 400 });
+    // conflito de negócio (tentou ajustar abaixo do reservado) -> 409
+    const status = result.error === "below_reserved" ? 409 : 400;
+    return NextResponse.json({ ok: false, error: result.error, message: result.message }, { status });
   }
 
   await writeAuditLog({
@@ -72,5 +82,6 @@ export async function POST(req: Request) {
     userAgent: req.headers.get("user-agent"),
   });
 
+  // result já contém ok:true
   return NextResponse.json(result, { status: 201 });
 }
