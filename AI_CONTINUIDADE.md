@@ -53,3 +53,6 @@ Saída: .\_inventario\cursor_bundle
 - Melhorar UI de /orcamentos (wizard vendedor) e fluxo completo de orçamento -> pedido -> confirmar
 - Padronizar respostas JSON { ok, error, message } em todas APIs
 - Tela de audit trail no detalhe (consumir /api/audit-logs)
+## Ponto atual (HEAD)
+- Commit: ea54aeb2088152f651fb91699c8499f605ddc65a
+
