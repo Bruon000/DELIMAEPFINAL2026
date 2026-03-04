@@ -1,3 +1,6 @@
+## Para continuar com IA
+Leia **AI_CONTINUIDADE.md** e **CHECKLIST.md** antes de qualquer alteração.
+
 # ERP Industrial – Serralheria
 
 ERP modular para serralheria com foco em **produto**, **BOM**, **produção (PWA)** e **financeiro**. UI inspirada no Olist: sidebar colapsável, tabelas densas, cards e status badges.
