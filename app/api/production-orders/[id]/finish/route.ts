@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 
 function n(x: any) { return Number(x ?? 0); }
 
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!session?.user) {
+    return NextResponse.json({ ok: false, error: "unauthorized", message: "Sessão expirada. Faça login novamente." }, { status: 401 });
+  }
   const companyId = session.user.companyId as string;
   const userId = session.user.id as string;
 
@@ -27,7 +30,9 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     },
   } as any);
 
-  if (!op) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!op) {
+    return NextResponse.json({ ok: false, error: "not_found", message: "OP não encontrada" }, { status: 404 });
+  }
 
   // calcular consumo
   const requiredByMaterial = new Map<string, number>();
@@ -61,7 +66,9 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     if (s.res + 1e-9 < need) issues.push({ materialId: mid, need, reserved: s.res });
     if (s.qty + 1e-9 < need) issues.push({ materialId: mid, need, quantity: s.qty });
   }
-  if (issues.length) return NextResponse.json({ error: "stock_inconsistent", issues }, { status: 409 });
+  if (issues.length) {
+    return NextResponse.json({ ok: false, error: "stock_inconsistent", message: "Estoque inconsistente para finalizar OP", issues }, { status: 409 });
+  }
 
   await prisma.$transaction(async (tx) => {
     for (const [mid, need] of Array.from(requiredByMaterial.entries())) {
@@ -85,7 +92,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
           type: "CONSUMED" as any,
           quantity: -need,
           balance: newQty,
-          reference: id, // ProductionOrder.id
+          reference: `OP:${id}`,
           note: "Consumo ao finalizar produção",
           createdBy: userId,
         } as any,
@@ -98,5 +105,20 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     } as any);
   });
 
-  return NextResponse.json({ ok: true });
+  // Auditoria (não derruba operação se falhar)
+  await writeAuditLog({
+    companyId,
+    userId,
+    action: "PRODUCTION_FINISH",
+    entity: "PRODUCTION_ORDER",
+    entityId: id,
+    payload: {
+      consumed: Array.from(requiredByMaterial.entries()).map(([materialId, need]) => ({ materialId, quantity: need })),
+      orderId: (op as any).orderId ?? undefined,
+    },
+    ip: req.headers.get("x-forwarded-for") ?? undefined,
+    userAgent: req.headers.get("user-agent") ?? undefined,
+  });
+
+  return NextResponse.json({ ok: true, productionOrderId: id });
 }

@@ -60,6 +60,9 @@ const mainNav: NavItem[] = [
       { title: "Materiais", href: "/estoque/materiais" },
       { title: "Entradas", href: "/estoque/entradas" },
       { title: "Movimentações", href: "/estoque/movimentacoes" },
+      { title: "Reservas (por material)", href: "/estoque/reservas" },
+      { title: "Reservas (por pedido)", href: "/estoque/reservas-origem" },
+      { title: "Crítico", href: "/estoque/critico" },
     ],
   },
 
