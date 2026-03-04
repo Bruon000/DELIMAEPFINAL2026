@@ -39,7 +39,11 @@ const mainNav: NavItem[] = [
     children: [
       { title: "Pedidos", href: "/pedidos" },
       { title: "Orçamentos", href: "/orcamentos" },
-    ],
+    
+  { title: "Comercial - Clientes", href: "/comercial/clientes" },
+  { title: "Comercial - Orçamentos", href: "/comercial/orcamentos" },
+  { title: "Comercial - Pedidos", href: "/comercial/pedidos" },
+],
   },
 
   {
