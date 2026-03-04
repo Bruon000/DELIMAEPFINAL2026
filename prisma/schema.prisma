@@ -43,6 +43,7 @@ model Company {
   purchaseOrders PurchaseOrder[]
 
   productPricingRules ProductPricingRule[]
+  quotes              Quote[]
 }
 
 model CompanyTheme {
@@ -138,6 +139,7 @@ model User {
 
   auditLogs     AuditLog[]
   ordersCreated Order[]        @relation("OrderCreatedBy")
+  quotesCreated Quote[]        @relation("QuoteCreatedBy")
   cashSessions  CashSession[]
   notifications Notification[]
   timeEntries   TimeEntry[]
@@ -186,6 +188,7 @@ model Client {
   addressCity     String?
   addressState    String?
   addressZip      String?
+  Quote           Quote[]
 }
 
 model Supplier {
@@ -286,6 +289,7 @@ model Product {
   bom                  BOM?
   orderItems           OrderItem[]
   productionOrderItems ProductionOrderItem[]
+  quoteItems           QuoteItem[]
 }
 
 enum ProductType {
@@ -411,16 +415,59 @@ model OrderItem {
 }
 
 // Orçamento (base pronta)
+enum QuoteStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELED
+}
+
 model Quote {
-  id         String    @id @default(cuid())
-  companyId  String
-  clientId   String
-  number     String?
-  status     String    @default("DRAFT") // DRAFT, SENT, CONVERTED, EXPIRED
-  total      Decimal   @default(0) @db.Decimal(15, 4)
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  createdById String?
+  createdBy   User?   @relation("QuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  number String? // número sequencial (opcional)
+  status QuoteStatus @default(DRAFT)
+
+  subtotal Decimal @default(0) @db.Decimal(15, 4)
+  discount Decimal @default(0) @db.Decimal(15, 4)
+  total    Decimal @default(0) @db.Decimal(15, 4)
+
+  notes      String?
   validUntil DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  items QuoteItem[]
+}
+
+model QuoteItem {
+  id      String @id @default(cuid())
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  quantity  Decimal @db.Decimal(15, 4)
+  unitPrice Decimal @db.Decimal(15, 4)
+  discount  Decimal @default(0) @db.Decimal(15, 4)
+  total     Decimal @db.Decimal(15, 4)
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ========== 5) ESTOQUE ==========
