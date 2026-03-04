@@ -1,3 +1,52 @@
+# CHECKLIST
+
+
+**Notas técnicas importantes:** ver NOTES.md
+## Estoque (P0)
+
+- [x] Razão do estoque (ledger) com filtros e paginação
+- [x] Saída manual (ISSUED) com auditoria
+- [x] Ajuste de inventário por saldo (ADJUSTMENT) com auditoria
+- [ ] Reservas (RESERVED) — tela + API (visão reservado vs disponível)
+- [ ] Estoque crítico (minStock) — tela + API (abaixo do mínimo)
+
+
+### Rotas
+- `GET /api/stock/ledger`
+  - Query: `q`, `materialId`, `type`, `from`, `to`, `cursor`, `take`
+  - Resposta: `{ ok, rows, nextCursor }`
+- `POST /api/stock/issue`
+  - Body: `{ materialId, quantity, reason?, reference?, note? }`
+- `POST /api/stock/inventory-adjust`
+  - Body: `{ materialId, newQuantity, reference?, note? }`
+
+### Testes rápidos (curl)
+1) Ledger (20 últimos)
+```bash
+curl.exe -s -b cookies.txt "http://localhost:3001/api/stock/ledger?take=20"
+```
+
+2) Saída manual
+```bash
+curl.exe -s -b cookies.txt -X POST "http://localhost:3001/api/stock/issue" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"materialId\":\"SEU_MATERIAL_ID\",\"quantity\":1,\"reason\":\"perda\"}"
+```
+
+3) Ajuste inventário
+```bash
+curl.exe -s -b cookies.txt -X POST "http://localhost:3001/api/stock/inventory-adjust" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"materialId\":\"SEU_MATERIAL_ID\",\"newQuantity\":10,\"note\":\"contagem\"}"
+```
+
+### UI (P0)
+- [x] /estoque/movimentacoes: filtros + busca + "Carregar mais"
+- [x] /estoque/movimentacoes: modal "Saída manual" e "Ajuste inventário"
+
+
+
+---
 
 ## Status atual (ATUALIZE SEMPRE)
 - Data: 2026-03-02 17:51:39
@@ -24,9 +73,33 @@
   - [x] Marcar como ENVIADO (POST /api/purchase-orders/:id/send)
   - [x] Receber compra (POST /api/purchase-orders/:id/receive) -> entrada estoque + ledger
   - [x] Cancelar (POST /api/purchase-orders/:id/cancel)
+- [x] **Importação NF-e (XML) -> Compras/Estoque**
+  - [x] POST /api/fiscal/nfe/import (XML no body) cria Supplier/PO/Items, recebe estoque, cria FiscalInvoice (dedupe)
+  - [x] Dedupe por chNFe (FiscalInvoice @@unique companyId+type+key) + tratamento P2002 em race
+  - [x] Resposta padronizada { ok, error?, message? }; unit_required e erros claros
+  - [x] Unidade: fallback preferir code "UN"; mapear uCom por code/nome
+  - [x] Material: buscar por code (cProd) depois nome; criar com code/unit/currentCost
+  - [x] Audit: NFE_IMPORTED e NFE_IMPORT_DEDUPE (chNFe, purchaseOrderId, itemsCount, supplierName, emittedAt)
+  - [x] UI /compras/pedidos: botão "Importar NF-e (XML)" no PageHeader, toast (sonner), validação .xml e tamanho, CTA Unidades
+  - [x] Script scripts/nfe-import-test.ps1: UTF-8, exibe arquivo/tamanho/HTTP/URL; -TestDedupe opcional
+
+**Aplicar unique FiscalInvoice no banco:** o schema tem `@@unique([companyId, type, key])`. Se o projeto usa migrations: `npx prisma migrate dev --name add_fiscalinvoice_unique`. Se não usar migrations: `npx prisma db push`.
+
+**Testar na UI (3 passos):** (1) Acessar `/compras/pedidos`, (2) Clicar em "Importar NF-e (XML)" no header e escolher um .xml válido, (3) Ver toast de sucesso e redirecionamento para o pedido; repetir com o mesmo XML e ver toast "já importada".
+
+**Testar script (2 comandos):** `.\scripts\nfe-import-test.ps1 -XmlPath "C:\caminho\para\nfe.xml"` e com dedupe: `.\scripts\nfe-import-test.ps1 -XmlPath "C:\caminho\para\nfe.xml" -TestDedupe`.
 
 ### Estoque / Ledger
 - [x] Ledger grava RECEIVED no recebimento de PO (reference PO:...)
+- [x] **GET /api/stock/ledger** — Filtros (materialId, type, q, from, to), paginação por cursor (cursor, take 1–200), busca em reference/note/material.name/code; resposta `{ ok, rows, nextCursor }`.
+- [x] **POST /api/stock/issue** — Saída manual de estoque (tipo ISSUED): body `materialId`, `quantity` (>0), opcional `reference`, `note`, `reason`; valida estoque disponível; grava ledger e audit STOCK_ISSUED.
+- [x] **POST /api/stock/inventory-adjust** — Ajuste de inventário por saldo: body `materialId`, `newQuantity` (>=0), opcional `reference`, `note`; não permite ajustar abaixo do reservado; grava tipo ADJUSTMENT e audit STOCK_INVENTORY_ADJUST.
+
+**Testar (curl/Insomnia, com sessão autenticada):**
+- Ledger: `GET /api/stock/ledger?take=20&materialId=xxx` ou `?q=texto&from=2026-01-01&to=2026-12-31&cursor=...`
+- Saída manual: `POST /api/stock/issue` body `{ "materialId": "<id>", "quantity": 5, "reason": "perda" }`
+- Ajuste: `POST /api/stock/inventory-adjust` body `{ "materialId": "<id>", "newQuantity": 100, "note": "inventário cíclico" }`
+
 - [x] Bootstrap demo cria materiais + estoque inicial + produtos + cliente + fornecedor + pedido + PO (scripts/bootstrap-demo.js)
 
 ### Auditoria
@@ -132,7 +205,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Entrada de compra (RECEIVED) — tela/fluxo
 - [x] Reserva automática ao confirmar pedido (RESERVED) usando BOM
 - [x] Baixa ao finalizar produção (CONSUMED)
-- [ ] Ajuste manual (ADJUSTMENT)
+- [x] Ajuste manual (ADJUSTMENT) — POST /api/stock/inventory-adjust
 - [ ] Estoque mínimo + alertas (base) — campo minStock existe
 - [ ] Inventário (contagem) base
 
@@ -290,10 +363,10 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 ## ERP Completo — Backlog (para não faltar nada)
 
 ### A) Estoque (operacional completo)
-- [x] Movimentações (StockLedger) — listar com filtros (material, tipo, período)
+- [x] Movimentações (StockLedger) — listar com filtros (material, tipo, período), paginação por cursor e busca (q)
 - [x] Entrada de estoque (RECEIVED) — tela + API (compra/nota) atualiza StockItem.quantity e grava StockLedger
-- [ ] Saída de estoque manual (OUT/ADJUSTMENT negativo) — tela + API com motivo
-- [ ] Ajuste de inventário (ADJUSTMENT) — recalcular saldo e gravar ledger
+- [x] Saída de estoque manual (ISSUED) — POST /api/stock/issue com materialId, quantity, reference, note, reason
+- [x] Ajuste de inventário (ADJUSTMENT) — POST /api/stock/inventory-adjust com materialId, newQuantity, reference, note
 - [ ] Reservas (RESERVED) — visualizar reservas por pedido/OP
 - [ ] Consumo na produção (CONSUMED) — já baixa; falta gravar StockLedger (consumo) + auditoria
 - [ ] Alertas de mínimo (Material.minStock) — lista “abaixo do mínimo”
@@ -316,7 +389,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 ### C) Fiscal / XML / NF-e (stub → completo)
 - [ ] Tabelas CFOP/CST/NCM — seeds simples
-- [ ] Importação XML de compra (NF-e entrada) — ler itens, mapear material/produto, gerar RECEIVED + ledger
+- [x] Importação XML de compra (NF-e entrada) — ler itens, mapear material/produto, gerar RECEIVED + ledger (ver seção Compras acima)
 - [ ] Emissão/consulta/cancelamento NF-e (endpoints 501 inicialmente)
 - [ ] Webhook fiscal (log payload)
 - [ ] Configurações fiscais por empresa (FiscalConfig) — UI

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { Providers } from "./providers";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
+        <Toaster richColors position="top-right" />
         <Providers>
           <SidebarProvider>
             <div className="flex min-h-screen">

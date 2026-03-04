@@ -41,9 +41,14 @@ Generated at: 2026-03-02 18:03:28
 - /app/api/purchase-orders/[id]/send
 - /app/api/search
 - /app/api/stock/adjust
-- /app/api/stock/ledger
 - /app/api/stock/receive
+- /app/api/stock/ledger
+- /app/api/stock/issue
+- /app/api/stock/inventory-adjust
+- /app/api/stock/reservations
+- /app/api/stock/critical
 - /app/api/suppliers
+- /app/api/fiscal/nfe/import
 - /app/api/units
 - /app/api/units/[id]
 - /app/api/users
