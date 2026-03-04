@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/erp/page-header";
@@ -22,33 +22,78 @@ import { Label } from "@/components/ui/label";
 async function fetchPayables() {
   const res = await fetch("/api/accounts-payable");
   const data = await res.json().catch(() => ({}));
-  // Stub 501: tratar como vazio, mas avisar
-  if (res.status === 501) return { items: [], message: data?.message ?? "Integração pendente." };
   if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar contas a pagar");
   return data as { items: any[] };
 }
 
+async function createPayable(payload: { description?: string; amount: number; dueDate: string }) {
+  const res = await fetch("/api/accounts-payable", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? data?.message ?? "Erro ao criar despesa");
+  return data as { ok: boolean; id: string };
+}
+
+async function markPaid(id: string) {
+  const res = await fetch(`/api/accounts-payable/${id}/mark-paid`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao marcar pago");
+  return data;
+}
+
 export default function ContasPagarPage() {
+  const qc = useQueryClient();
   const [q, setQ] = React.useState("");
   const [dlg, setDlg] = React.useState(false);
   const [amount, setAmount] = React.useState("0");
   const [desc, setDesc] = React.useState("");
   const [due, setDue] = React.useState("");
+  const [status, setStatus] = React.useState<"ALL" | "PENDING" | "PAID" | "OVERDUE" | "CANCELED">("ALL");
 
   const qPay = useQuery({ queryKey: ["accounts-payable"], queryFn: fetchPayables });
   const items = React.useMemo(() => {
     return qPay.data?.items ?? [];
   }, [qPay.data?.items]);
 
+  const createMut = useMutation({
+    mutationFn: () => createPayable({ description: desc.trim() || undefined, amount: Number(amount ?? 0), dueDate: due }),
+    onSuccess: async () => {
+      toast.success("Despesa criada.");
+      setDlg(false);
+      setAmount("0");
+      setDesc("");
+      setDue("");
+      await qc.invalidateQueries({ queryKey: ["accounts-payable"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao criar despesa"),
+  });
+
+  const paidMut = useMutation({
+    mutationFn: (id: string) => markPaid(id),
+    onSuccess: async () => {
+      toast.success("Despesa marcada como paga. Saída registrada no Caixa (OUT).");
+      await qc.invalidateQueries({ queryKey: ["accounts-payable"] });
+      await qc.invalidateQueries({ queryKey: ["cash-session"] });
+      await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao marcar pago"),
+  });
+
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter((x: any) => String(x.description ?? "").toLowerCase().includes(needle));
-  }, [items, q]);
+    return items.filter((x: any) => {
+      if (status !== "ALL" && String(x.status ?? "") !== status) return false;
+      if (!needle) return true;
+      return String(x.description ?? "").toLowerCase().includes(needle);
+    });
+  }, [items, q, status]);
 
   const columns: Column<any>[] = [
     { key: "desc", header: "Descrição", cell: (r) => <div className="font-medium">{r.description ?? "-"}</div> },
-    { key: "due", header: "Venc.", headerClassName: "w-[140px]", cell: (r) => r.dueDate ? String(r.dueDate) : "—" },
+    { key: "due", header: "Venc.", headerClassName: "w-[140px]", cell: (r) => r.dueDate ? new Date(r.dueDate).toLocaleDateString("pt-BR") : "—" },
     {
       key: "amount",
       header: "Valor",
@@ -57,17 +102,35 @@ export default function ContasPagarPage() {
       cell: (r) => `R$ ${Number(r.amount ?? 0).toFixed(2)}`,
     },
     { key: "status", header: "Status", headerClassName: "w-[140px]", cell: (r) => r.status ?? "—" },
+    {
+      key: "actions",
+      header: "",
+      headerClassName: "w-[160px]",
+      className: "text-right",
+      cell: (r) => (
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={String(r.status ?? "") === "PAID" || paidMut.isPending}
+          onClick={(e) => {
+            e.stopPropagation();
+            paidMut.mutate(r.id);
+          }}
+        >
+          {String(r.status ?? "") === "PAID" ? "Pago" : "Marcar pago"}
+        </Button>
+      ),
+    },
   ];
 
   return (
     <div className="p-6 space-y-4">
       <PageHeader
         title="Contas a Pagar"
-        subtitle="Despesas, vencimentos e marcação de pago (em implementação)."
+        subtitle="Despesas, vencimentos e marcação de pago."
         actions={
           <Button
             onClick={() => {
-              if (qPay.data?.message) toast.info(qPay.data.message);
               setDlg(true);
             }}
           >
@@ -80,6 +143,19 @@ export default function ContasPagarPage() {
         search={q}
         onSearchChange={setQ}
         onClearAll={() => setQ("")}
+        leftSlot={
+          <select
+            className="h-10 rounded-md border bg-background px-3 text-sm"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as any)}
+          >
+            <option value="ALL">Todos</option>
+            <option value="PENDING">Pendente</option>
+            <option value="OVERDUE">Vencida</option>
+            <option value="PAID">Paga</option>
+            <option value="CANCELED">Cancelada</option>
+          </select>
+        }
         rightSlot={
           <Button variant="secondary" onClick={() => setQ("")}>
             Limpar
@@ -95,7 +171,7 @@ export default function ContasPagarPage() {
         emptyHint={
           qPay.isLoading
             ? "Buscando dados…"
-            : "A API de AccountsPayable ainda é stub. Vamos plugar o CRUD real no próximo pacote."
+            : "Cadastre despesas e marque como pagas para gerar saída no Caixa."
         }
       />
 
@@ -104,7 +180,7 @@ export default function ContasPagarPage() {
           <DialogHeader>
             <DialogTitle>Nova despesa</DialogTitle>
             <DialogDescription>
-              Cadastro de despesa (stub). No próximo pacote, vamos persistir no banco e permitir marcar pago.
+              Cadastro de despesa (PENDING).
             </DialogDescription>
           </DialogHeader>
 
@@ -126,12 +202,10 @@ export default function ContasPagarPage() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDlg(false)}>Cancelar</Button>
             <Button
-              onClick={() => {
-                toast.info("Integração pendente: salvar despesa (stub).");
-                setDlg(false);
-              }}
+              onClick={() => createMut.mutate()}
+              disabled={createMut.isPending}
             >
-              Salvar
+              {createMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -163,7 +164,18 @@ export default function CaixaPage() {
       cell: (t) => (
         <div className="min-w-[320px]">
           <div className="text-sm font-medium">{t.description ?? "-"}</div>
-          <div className="text-xs text-muted-foreground">{t.reference ? `Ref: ${t.reference}` : ""}</div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {t.reference ? <span>{`Ref: ${t.reference}`}</span> : null}
+            {t.reference && String(t.reference).startsWith("AP:") ? (
+              <Link
+                href={`/financeiro/contas-pagar?q=${encodeURIComponent(String(t.reference).slice(3))}`}
+                onClick={(e) => e.stopPropagation()}
+                className="underline"
+              >
+                Abrir
+              </Link>
+            ) : null}
+          </div>
         </div>
       ),
     },
