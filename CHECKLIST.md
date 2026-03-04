@@ -7,8 +7,8 @@
 - [x] Razão do estoque (ledger) com filtros e paginação
 - [x] Saída manual (ISSUED) com auditoria
 - [x] Ajuste de inventário por saldo (ADJUSTMENT) com auditoria
-- [ ] Reservas (RESERVED) — tela + API (visão reservado vs disponível)
-- [ ] Estoque crítico (minStock) — tela + API (abaixo do mínimo)
+- [x] Reservas (RESERVED) — tela + API (visão reservado vs disponível)
+- [x] Estoque crítico (minStock) — tela + API (abaixo do mínimo)
 
 
 ### Rotas
@@ -49,7 +49,7 @@ curl.exe -s -b cookies.txt -X POST "http://localhost:3001/api/stock/inventory-ad
 ---
 
 ## Status atual (ATUALIZE SEMPRE)
-- Data: 2026-03-02 17:51:39
+$12026-03-04 10:46:34
 - Ambiente: Windows / Next.js 14 / Prisma / Postgres (docker)
 - Login seed: admin@demo.com / admin123
 - DB (DEV): DATABASE_URL em .env apontando para delima_epfinal2026
@@ -367,7 +367,7 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 - [x] Entrada de estoque (RECEIVED) — tela + API (compra/nota) atualiza StockItem.quantity e grava StockLedger
 - [x] Saída de estoque manual (ISSUED) — POST /api/stock/issue com materialId, quantity, reference, note, reason
 - [x] Ajuste de inventário (ADJUSTMENT) — POST /api/stock/inventory-adjust com materialId, newQuantity, reference, note
-- [ ] Reservas (RESERVED) — visualizar reservas por pedido/OP
+- [x] Reservas (RESERVED) — tela + API (visão reservado vs disponível)
 - [ ] Consumo na produção (CONSUMED) — já baixa; falta gravar StockLedger (consumo) + auditoria
 - [ ] Alertas de mínimo (Material.minStock) — lista “abaixo do mínimo”
 - [ ] Histórico por material (extrato do material) — saldo antes/depois (balance) e referências
