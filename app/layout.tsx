@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Toaster } from "sonner";
 import "./globals.css";
+
 import { Providers } from "./providers";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { MainContent } from "@/components/layout/main-content";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "ERP Serralheria",
-  description: "ERP Industrial para Serralheria - Comercial, Produção, Estoque e Financeiro",
+  description:
+    "ERP Industrial para Serralheria - Comercial, Produção, Estoque e Financeiro",
 };
 
 export default function RootLayout({
@@ -23,18 +25,20 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
-        <Toaster richColors position="top-right" />
         <Providers>
           <SidebarProvider>
-            <div className="flex min-h-screen">
+            <div className="min-h-screen bg-background">
               <Sidebar />
-              <MainContent>
+
+              <div className="flex min-h-screen flex-col">
                 <Topbar />
-                <div className="p-6">{children}</div>
-              </MainContent>
+                <MainContent>{children}</MainContent>
+              </div>
             </div>
           </SidebarProvider>
         </Providers>
+
+        <Toaster />
       </body>
     </html>
   );

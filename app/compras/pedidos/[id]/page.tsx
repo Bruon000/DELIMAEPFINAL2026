@@ -1,11 +1,22 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { PageHeader } from "@/components/erp/page-header";
 import { PurchaseOrderStatusBadge } from "@/components/erp/status-badge";
 import { DataTable, type Column } from "@/components/erp/data-table";
@@ -68,6 +79,16 @@ function money(n: any) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  description?: string;
+  confirmText?: string;
+  cancelText?: string;
+  destructive?: boolean;
+  onConfirm?: () => void;
+};
+
 export default function CompraDetailPage() {
   const params = useParams();
   const id = String((params as any).id);
@@ -83,7 +104,11 @@ export default function CompraDetailPage() {
   const [materialId, setMaterialId] = React.useState("");
   const [quantity, setQuantity] = React.useState(1);
   const [unitCost, setUnitCost] = React.useState(0);
-  const [msg, setMsg] = React.useState<string | null>(null);
+
+  const [confirm, setConfirm] = React.useState<ConfirmState>({
+    open: false,
+    title: "",
+  });
 
   const total = React.useMemo(() => {
     return items.reduce((s: number, it: any) => s + Number(it.total ?? 0), 0);
@@ -97,81 +122,105 @@ export default function CompraDetailPage() {
   const addMut = useMutation({
     mutationFn: (p: any) => addItem(id, p),
     onSuccess: async () => {
-      setMsg("Item adicionado.");
+      toast.success("Item adicionado.");
       setMaterialId("");
       setQuantity(1);
       setUnitCost(0);
       await qc.invalidateQueries({ queryKey: ["po", id] });
     },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro"),
   });
 
   const delMut = useMutation({
     mutationFn: (itemId: string) => removeItem(itemId),
     onSuccess: async () => {
-      setMsg("Item removido.");
+      toast.success("Item removido.");
       await qc.invalidateQueries({ queryKey: ["po", id] });
     },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro"),
   });
 
   const sendMut = useMutation({
-    mutationFn: async () => {
-      if (!window.confirm("Marcar este pedido como ENVIADO?")) return;
-      return markSent(id);
-    },
+    mutationFn: () => markSent(id),
     onSuccess: async () => {
-      setMsg("Pedido marcado como ENVIADO.");
+      toast.success("Pedido marcado como ENVIADO.");
       await qc.invalidateQueries({ queryKey: ["po", id] });
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
     },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro"),
   });
 
   const cancelMut = useMutation({
-    mutationFn: async () => {
-      if (!window.confirm("Cancelar este pedido de compra?")) return;
-      return cancelPO(id);
-    },
+    mutationFn: () => cancelPO(id),
     onSuccess: async () => {
-      setMsg("Pedido CANCELADO.");
+      toast.success("Pedido CANCELADO.");
       await qc.invalidateQueries({ queryKey: ["po", id] });
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
     },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro"),
   });
 
   const recMut = useMutation({
-    mutationFn: async () => {
-      if (!window.confirm("Confirmar RECEBIMENTO? Isso vai dar entrada no estoque e atualizar custos.")) return;
-      return receivePO(id);
-    },
+    mutationFn: () => receivePO(id),
     onSuccess: async (d: any) => {
       const updatedCosts = d?.updatedCosts ?? [];
-      setMsg(
+      toast.success(
         updatedCosts.length
           ? `Compra recebida! Custos atualizados em ${updatedCosts.length} material(is).`
           : "Compra recebida! Estoque/ledger atualizados."
       );
+
       await qc.invalidateQueries({ queryKey: ["po", id] });
       await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       await qc.invalidateQueries({ queryKey: ["materials"] });
       await qc.invalidateQueries({ queryKey: ["stock-ledger"] });
     },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro"),
   });
 
   if (poQ.isLoading) return <div className="p-6">Carregando...</div>;
-  if (poQ.error || !po) return <div className="p-6 text-sm text-red-600">Falha ao carregar o pedido.</div>;
+  if (poQ.error || !po)
+    return <div className="p-6">Falha ao carregar o pedido.</div>;
 
-  const columns: Column<any>[] = [
+  // Origem NF-e (campos padronizados pela API)
+  const nfeKey = (po as any)?.nfeKey ?? (po as any)?.nfe?.key ?? null;
+  const nfeIssuedAtRaw = (po as any)?.nfeIssuedAt ?? (po as any)?.nfe?.issuedAt ?? null;
+  const nfeIssuedAt = nfeIssuedAtRaw ? new Date(nfeIssuedAtRaw).toLocaleString("pt-BR") : null;
+
+  const supplierLine = [
+    po.supplier?.name ?? "-",
+    po.supplier?.document ? `Doc: ${po.supplier.document}` : null,
+    po.supplier?.phone ? `Tel: ${po.supplier.phone}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const columns: Column[] = [
     {
       key: "material",
       header: "Material",
       cell: (it) => (
-        <div className="min-w-[260px]">
-          <div className="font-medium">{it.material?.name ?? it.materialId}</div>
-          {it.material?.code ? <div className="text-xs text-muted-foreground">Código: {it.material.code}</div> : null}
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-medium">
+              {it.material?.name ?? it.materialId}
+            </div>
+            <Link
+              href={`/estoque/movimentacoes?materialId=${encodeURIComponent(
+                String(it.materialId)
+              )}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button variant="outline" size="sm">
+                Ledger
+              </Button>
+            </Link>
+          </div>
+          {it.material?.code ? (
+            <div className="text-xs text-muted-foreground">
+              Código: {it.material.code}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -203,14 +252,21 @@ export default function CompraDetailPage() {
       className: "text-right",
       cell: (it) => (
         <Button
-          variant="destructive"
+          variant="outline"
           size="sm"
           disabled={!canEdit || delMut.isPending}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (!window.confirm("Remover este item?")) return;
-            delMut.mutate(it.id);
+            setConfirm({
+              open: true,
+              title: "Remover item",
+              description: "Tem certeza que deseja remover este item do pedido?",
+              confirmText: "Remover",
+              cancelText: "Voltar",
+              destructive: true,
+              onConfirm: () => delMut.mutate(it.id),
+            });
           }}
         >
           Remover
@@ -220,111 +276,200 @@ export default function CompraDetailPage() {
   ];
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-6">
       <PageHeader
-        title="Pedido de Compra"
-        subtitle="Fluxo industrial: rascunho → enviado → recebido (entrada em estoque + ledger + custo atualizado)."
-        meta={<PurchaseOrderStatusBadge status={po.status} />}
+        title={`Pedido de Compra #${po.id}`}
+        subtitle={supplierLine}
+        meta={
+          <div className="flex flex-wrap items-center gap-2">
+            <PurchaseOrderStatusBadge status={status as any} />
+            <span className="text-sm text-muted-foreground">
+              Total: <span className="font-medium text-foreground">{money(total)}</span>
+            </span>
+            <span className="text-sm text-muted-foreground">
+              Itens: <span className="font-medium text-foreground">{items.length}</span>
+            </span>
+
+            {nfeKey ? (
+              <span className="text-sm text-muted-foreground">
+                NF-e:{" "}
+                <span className="font-mono text-foreground">
+                  {String(nfeKey).slice(0, 10)}…{String(nfeKey).slice(-6)}
+                </span>
+                {nfeIssuedAt ? <span> · {nfeIssuedAt}</span> : null}
+              </span>
+            ) : null}
+          </div>
+        }
         actions={
-          <>
-            <Button variant="outline" disabled={!canSend || sendMut.isPending} onClick={() => sendMut.mutate()}>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const ref = nfeKey ? `NFE:${nfeKey}` : `PO:${po.id}`;
+                window.location.href = `/estoque/movimentacoes?ref=${encodeURIComponent(ref)}`;
+              }}
+            >
+              Ledger
+            </Button>
+            <Button
+              disabled={!canSend || sendMut.isPending}
+              onClick={() =>
+                setConfirm({
+                  open: true,
+                  title: "Marcar como ENVIADO",
+                  description:
+                    "Após enviar, o pedido não poderá mais ser editado. Deseja continuar?",
+                  confirmText: "Marcar como Enviado",
+                  cancelText: "Voltar",
+                  onConfirm: () => sendMut.mutate(),
+                })
+              }
+            >
               {sendMut.isPending ? "Enviando..." : "Marcar como Enviado"}
             </Button>
 
-            <Button variant="destructive" disabled={!canCancel || cancelMut.isPending} onClick={() => cancelMut.mutate()}>
+            <Button
+              variant="destructive"
+              disabled={!canCancel || cancelMut.isPending}
+              onClick={() =>
+                setConfirm({
+                  open: true,
+                  title: "Cancelar pedido de compra",
+                  description:
+                    "Esta ação marca o pedido como CANCELADO. Deseja continuar?",
+                  confirmText: "Cancelar",
+                  cancelText: "Voltar",
+                  destructive: true,
+                  onConfirm: () => cancelMut.mutate(),
+                })
+              }
+            >
               {cancelMut.isPending ? "Cancelando..." : "Cancelar"}
             </Button>
 
-            <Button disabled={!canReceive || recMut.isPending} onClick={() => recMut.mutate()}>
+            <Button
+              variant="secondary"
+              disabled={!canReceive || recMut.isPending}
+              onClick={() =>
+                setConfirm({
+                  open: true,
+                  title: "Confirmar RECEBIMENTO",
+                  description:
+                    "Isso dará entrada no estoque, criará movimentações no ledger e atualizará custos (currentCost) dos materiais. Deseja continuar?",
+                  confirmText: "Receber",
+                  cancelText: "Voltar",
+                  onConfirm: () => recMut.mutate(),
+                })
+              }
+            >
               {recMut.isPending ? "Recebendo..." : "Receber (entrada estoque)"}
             </Button>
-          </>
+          </div>
         }
       />
-
-      {msg ? <div className="text-sm text-muted-foreground">{msg}</div> : null}
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Resumo</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm md:grid-cols-2">
-            <div><b>ID:</b> {po.id}</div>
-            <div><b>Status:</b> {status}</div>
-            <div className="md:col-span-2">
-              <b>Fornecedor:</b> {po.supplier?.name ?? "-"}
-              {po.supplier?.document ? <span className="text-muted-foreground"> · Doc: {po.supplier.document}</span> : null}
-              {po.supplier?.phone ? <span className="text-muted-foreground"> · Tel: {po.supplier.phone}</span> : null}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Total</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <div className="text-2xl font-bold tabular-nums">{money(total)}</div>
-            <div className="text-xs text-muted-foreground">Itens: {items.length}</div>
-          </CardContent>
-        </Card>
-      </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Adicionar item</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <select
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            value={materialId}
-            onChange={(e) => setMaterialId(e.target.value)}
-            disabled={!canEdit || matsQ.isLoading}
-          >
-            <option value="">{matsQ.isLoading ? "Carregando materiais..." : "Selecione um material…"}</option>
-            {(matsQ.data?.materials ?? []).map((m: any) => (
-              <option key={m.id} value={m.id}>
-                {m.code ? `${m.code} - ` : ""}{m.name}
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-4">
+            <select
+              className="h-10 rounded-md border bg-background px-3 text-sm"
+              value={materialId}
+              onChange={(e) => setMaterialId(e.target.value)}
+              disabled={!canEdit || matsQ.isLoading}
+            >
+              <option value="">
+                {matsQ.isLoading
+                  ? "Carregando materiais..."
+                  : "Selecione um material…"}
               </option>
-            ))}
-          </select>
+              {(matsQ.data?.materials ?? []).map((m: any) => (
+                <option key={m.id} value={m.id}>
+                  {m.code ? `${m.code} - ` : ""}
+                  {m.name}
+                </option>
+              ))}
+            </select>
 
-          <Input
-            type="number"
-            step="0.0001"
-            value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
-            disabled={!canEdit}
-            placeholder="Quantidade"
-          />
+            <Input
+              type="number"
+              step="0.0001"
+              value={quantity}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+              disabled={!canEdit}
+              placeholder="Quantidade"
+            />
 
-          <Input
-            type="number"
-            step="0.01"
-            value={unitCost}
-            onChange={(e) => setUnitCost(Number(e.target.value))}
-            disabled={!canEdit}
-            placeholder="Custo unit."
-          />
+            <Input
+              type="number"
+              step="0.0001"
+              value={unitCost}
+              onChange={(e) => setUnitCost(Number(e.target.value))}
+              disabled={!canEdit}
+              placeholder="Custo unit."
+            />
 
-          <Button
-            disabled={!canEdit || !materialId || quantity <= 0 || addMut.isPending}
-            onClick={() => addMut.mutate({ materialId, quantity, unitCost })}
-          >
-            {addMut.isPending ? "Adicionando..." : "Adicionar"}
-          </Button>
+            <Button
+              disabled={!canEdit || addMut.isPending || !materialId}
+              onClick={() => addMut.mutate({ materialId, quantity, unitCost })}
+            >
+              {addMut.isPending ? "Adicionando..." : "Adicionar"}
+            </Button>
+          </div>
+
+          {!canEdit ? (
+            <div className="text-xs text-muted-foreground">
+              Pedido não está em DRAFT — edição bloqueada.
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
       <DataTable
-        rows={items}
         columns={columns}
-        rowKey={(r) => r.id}
+        rows={items}
+        rowKey={(r: any) => r.id}
         emptyTitle="Sem itens"
-        emptyHint={canEdit ? "Adicione itens acima para enviar o pedido." : "Pedido sem itens."}
+        emptyHint={
+          canEdit ? "Adicione itens acima para enviar o pedido." : "Pedido sem itens."
+        }
       />
+
+      <Dialog
+        open={confirm.open}
+        onOpenChange={(v) => setConfirm((c) => ({ ...c, open: v }))}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirm.title}</DialogTitle>
+            {confirm.description ? (
+              <DialogDescription>{confirm.description}</DialogDescription>
+            ) : null}
+          </DialogHeader>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirm((c) => ({ ...c, open: false }))}
+            >
+              {confirm.cancelText ?? "Voltar"}
+            </Button>
+            <Button
+              variant={confirm.destructive ? "destructive" : "default"}
+              onClick={() => {
+                const fn = confirm.onConfirm;
+                setConfirm((c) => ({ ...c, open: false }));
+                fn?.();
+              }}
+            >
+              {confirm.confirmText ?? "Confirmar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

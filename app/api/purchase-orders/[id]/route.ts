@@ -21,7 +21,26 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   } as any);
 
   if (!po) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.json({ purchaseOrder: po });
+
+  // Anexar origem NF-e (sem schema change):
+  // FiscalInvoice.payload.purchaseOrderId == id (gravado no import)
+  const inv = await prisma.fiscalInvoice.findFirst({
+    where: {
+      companyId,
+      type: "NF-E" as any,
+      payload: { path: ["purchaseOrderId"], equals: id } as any,
+    } as any,
+    select: { key: true, issuedAt: true, createdAt: true } as any,
+  } as any);
+
+  const purchaseOrder: any = po as any;
+  if (inv?.key) {
+    purchaseOrder.nfe = { key: inv.key, issuedAt: inv.issuedAt ?? inv.createdAt };
+    purchaseOrder.nfeKey = inv.key;
+    purchaseOrder.nfeIssuedAt = inv.issuedAt ?? inv.createdAt;
+  }
+
+  return NextResponse.json({ purchaseOrder });
 }
 
 export async function PATCH(req: Request, ctx: { params: { id: string } }) {

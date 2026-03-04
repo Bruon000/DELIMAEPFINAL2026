@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -103,6 +105,8 @@ async function postInventoryAdjust(payload: {
 
 export default function EstoqueMovimentacoesPage() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [q, setQ] = React.useState("");
   const [type, setType] = React.useState<"ALL" | string>("ALL");
@@ -123,6 +127,43 @@ export default function EstoqueMovimentacoesPage() {
   const [adjNewQty, setAdjNewQty] = React.useState("0");
   const [adjRef, setAdjRef] = React.useState("");
   const [adjNote, setAdjNote] = React.useState("");
+
+  // Preenche busca com ?ref= (uma vez)
+  const didInitRef = React.useRef(false);
+  React.useEffect(() => {
+    if (didInitRef.current) return;
+    const ref = searchParams?.get("ref")?.trim();
+    const mid = searchParams?.get("materialId")?.trim();
+    if (ref) {
+      setQ(ref);
+      toast.info("Filtro aplicado pela referência: " + ref);
+    }
+    if (mid) {
+      setMaterialId(mid);
+      toast.info("Filtro aplicado pelo materialId: " + mid);
+    }
+    didInitRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const clearRefParam = () => {
+    setQ("");
+    setType("ALL");
+    setMaterialId("");
+    setFrom("");
+    setTo("");
+    // remove ?ref= da URL, preservando outros params se existirem
+    const sp = new URLSearchParams(searchParams?.toString() ?? "");
+    if (sp.has("ref")) sp.delete("ref");
+    const qs = sp.toString();
+    router.replace(qs ? `/estoque/movimentacoes?${qs}` : "/estoque/movimentacoes");
+    toast.info("Voltou para visão geral.");
+  };
+
+  const activeRef = React.useMemo(() => {
+    const ref = searchParams?.get("ref")?.trim();
+    return ref || null;
+  }, [searchParams]);
 
   const queryKey = React.useMemo(
     () => ["stock-ledger", { q, type, materialId, from, to }],
@@ -238,23 +279,80 @@ export default function EstoqueMovimentacoesPage() {
     {
       key: "actions",
       header: "",
-      headerClassName: "w-[140px]",
+      headerClassName: "w-[240px]",
       className: "text-right",
       cell: (r) => (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            setIssueMaterialId(r.materialId);
-            setIssueQty("1");
-            setIssueReason("perda");
-            setIssueRef(r.reference ?? "");
-            setIssueNote("");
-            setIssueOpen(true);
-          }}
-        >
-          Saída
-        </Button>
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              clearRefParam();
+              setMaterialId(r.materialId);
+              toast.info("Filtrando material: " + r.materialId);
+            }}
+          >
+            Filtrar material
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(r.materialId);
+                toast.success("MaterialId copiado: " + r.materialId);
+              } catch {
+                toast.error("Não foi possível copiar para a área de transferência.");
+              }
+            }}
+          >
+            Copiar materialId
+          </Button>
+          {r.reference && String(r.reference).startsWith("PO:") ? (
+            <Link
+              href={`/compras/pedidos/${String(r.reference).slice(3)}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button variant="outline" size="sm">Abrir PO</Button>
+            </Link>
+          ) : null}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async (e) => {
+              e.stopPropagation();
+              const ref = r.reference ?? "";
+              if (!ref) return toast.error("Sem referência para copiar.");
+              try {
+                await navigator.clipboard.writeText(ref);
+                toast.success("Referência copiada: " + ref);
+              } catch {
+                toast.error("Não foi possível copiar para a área de transferência.");
+              }
+            }}
+          >
+            Copiar ref
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIssueMaterialId(r.materialId);
+              setIssueQty("1");
+              setIssueReason("perda");
+              setIssueRef(r.reference ?? "");
+              setIssueNote("");
+              setIssueOpen(true);
+            }}
+          >
+            Saída
+          </Button>
+        </div>
       ),
     },
   ];
@@ -265,7 +363,25 @@ export default function EstoqueMovimentacoesPage() {
         title="Movimentações de Estoque"
         subtitle="Razão de estoque com filtros, busca e ações rápidas (saída e ajuste)."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {activeRef || materialId ? (
+              <>
+                {activeRef ? (
+                  <span className="text-xs text-muted-foreground">
+                    Ref ativa: <span className="font-mono">{activeRef}</span>
+                  </span>
+                ) : null}
+                {materialId ? (
+                  <span className="text-xs text-muted-foreground">
+                    Material ativo: <span className="font-mono">{materialId}</span>
+                  </span>
+                ) : null}
+                <Button variant="outline" onClick={clearRefParam}>
+                  Voltar geral
+                </Button>
+              </>
+            ) : null}
+            <div className="flex gap-2">
             <Button
               variant="secondary"
               onClick={() => {
@@ -291,6 +407,7 @@ export default function EstoqueMovimentacoesPage() {
             >
               Saída manual
             </Button>
+            </div>
           </div>
         }
       />

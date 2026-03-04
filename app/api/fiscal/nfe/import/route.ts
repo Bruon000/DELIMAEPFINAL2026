@@ -368,12 +368,35 @@ export async function POST(req: Request) {
       ip: req.headers.get("x-forwarded-for") ?? undefined,
       userAgent: req.headers.get("user-agent") ?? undefined,
     });
+
+    if (!d.purchaseOrderId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "dedupe_missing_purchase_order",
+          message:
+            "NF-e já importada, mas não foi possível localizar o Pedido de Compra vinculado. Reimporte a NF-e ou verifique o cadastro fiscal.",
+          alreadyImported: true,
+          deduped: true,
+          created: false,
+          chNFe: d.chNFe,
+          nfeKey: d.chNFe,
+          itemsCount: d.itemsCount,
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       alreadyImported: true,
+      deduped: true,
+      created: false,
       purchaseOrderId: d.purchaseOrderId,
       chNFe: d.chNFe,
+      nfeKey: d.chNFe,
       itemsCount: d.itemsCount,
+      message: "NF-e já importada (dedupe).",
     }, { status: 200 });
   }
 
@@ -389,7 +412,14 @@ export async function POST(req: Request) {
     userAgent: req.headers.get("user-agent") ?? undefined,
   });
 
-  return NextResponse.json({ ok: true, ...res }, { status: 201 });
+  return NextResponse.json({
+    ok: true,
+    created: true,
+    deduped: false,
+    nfeKey: res.chNFe,
+    message: "NF-e importada com sucesso.",
+    ...res,
+  }, { status: 201 });
   } catch (e: unknown) {
     console.error("NFE_IMPORT_ERROR", e);
     const msg = String((e as Error)?.message ?? e);

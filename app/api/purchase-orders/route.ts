@@ -29,7 +29,25 @@ export async function GET() {
     total: (po.items ?? []).reduce((s: number, it: any) => s + n(it.total), 0),
   }));
 
-  return NextResponse.json({ purchaseOrders: list });
+  // Anexar nfeKey via FiscalInvoice.payload.purchaseOrderId (sem schema change)
+  const invoices = await prisma.fiscalInvoice.findMany({
+    where: { companyId, type: "NF-E" as any } as any,
+    select: { key: true, payload: true } as any,
+  } as any);
+
+  const map: Record<string, string> = {};
+  for (const inv of invoices ?? []) {
+    const pid = (inv as any)?.payload?.purchaseOrderId;
+    const key = (inv as any)?.key;
+    if (pid && key) map[String(pid)] = String(key);
+  }
+
+  const enriched = (list ?? []).map((po: any) => ({
+    ...po,
+    nfeKey: map[String(po.id)] ?? null,
+  }));
+
+  return NextResponse.json({ purchaseOrders: enriched });
 }
 
 export async function POST(req: Request) {

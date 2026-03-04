@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/erp/page-header";
@@ -35,23 +34,6 @@ async function createPO(payload: any) {
   return data;
 }
 
-async function importNfeXml(xml: string) {
-  const res = await fetch("/api/fiscal/nfe/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ xml }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message =
-      res.status === 401
-        ? "Sessão expirada, faça login novamente."
-        : (data?.message ?? data?.error ?? "Erro ao importar NF-e");
-    throw { message, error: data?.error, status: res.status, data };
-  }
-  return data;
-}
-
 function money(n: any) {
   const v = Number(n ?? 0);
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -61,10 +43,9 @@ export default function ComprasPedidosPage() {
   const qc = useQueryClient();
 
   const [supplierId, setSupplierId] = React.useState("");
-  const [isImportingNfe, setIsImportingNfe] = React.useState(false);
-  const nfeFileRef = React.useRef<HTMLInputElement | null>(null);
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState<"ALL" | "DRAFT" | "SENT" | "RECEIVED" | "CANCELED">("ALL");
+  const [onlyWithNfe, setOnlyWithNfe] = React.useState(false);
 
   const { data: supData, isLoading: suppliersLoading } = useQuery({ queryKey: ["suppliers"], queryFn: fetchSuppliers });
   const { data, isLoading } = useQuery({ queryKey: ["purchase-orders"], queryFn: fetchPOs });
@@ -80,69 +61,21 @@ export default function ComprasPedidosPage() {
     onError: (e: Error) => toast.error(e?.message ?? "Erro ao criar pedido"),
   });
 
-  function onPickNfeClick() {
-    nfeFileRef.current?.click();
-  }
-
-  async function handlePickNfe(file: File | null) {
-    if (!file) return;
-    const name = (file.name || "").toLowerCase();
-    if (!name.endsWith(".xml")) {
-      toast.error("Selecione um arquivo .xml");
-      return;
-    }
-    if (file.size < 50) {
-      toast.error("Arquivo muito pequeno. Use um XML de NF-e válido.");
-      return;
-    }
-    setIsImportingNfe(true);
-    try {
-      const xml = await file.text();
-      const r = await importNfeXml(xml);
-      await qc.invalidateQueries({ queryKey: ["purchase-orders"] });
-
-      if (r?.alreadyImported) {
-        toast.success("NF-e já importada. Abrindo pedido existente...");
-      } else {
-        const count = r?.itemsCount ?? "?";
-        toast.success(`NF-e importada: ${count} itens. Abrindo pedido...`);
-      }
-
-      if (r?.purchaseOrderId) {
-        window.location.href = `/compras/pedidos/${r.purchaseOrderId}`;
-      }
-    } catch (err: unknown) {
-      const e = err as { message?: string; error?: string; data?: { message?: string } };
-      const msg = e?.data?.message ?? e?.message ?? "Erro ao importar NF-e";
-      if (e?.error === "unit_required") {
-        toast.warning(msg, {
-          action: {
-            label: "Ir para Unidades",
-            onClick: () => { window.location.href = "/cadastros/unidades"; },
-          },
-        });
-      } else {
-        toast.error(msg);
-      }
-    } finally {
-      setIsImportingNfe(false);
-      if (nfeFileRef.current) nfeFileRef.current.value = "";
-    }
-  }
-
-const suppliers = supData?.suppliers ?? [];
+  const suppliers = supData?.suppliers ?? [];
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
     return (data?.purchaseOrders ?? []).filter((po: any) => {
       const s = String(po.status ?? "").toUpperCase();
       if (status !== "ALL" && s !== status) return false;
+      if (onlyWithNfe && !po?.nfeKey) return false;
 
       if (!needle) return true;
       const name = String(po?.supplier?.name ?? "").toLowerCase();
       const id = String(po?.id ?? "").toLowerCase();
-      return name.includes(needle) || id.includes(needle);
+      const nfeKey = String(po?.nfeKey ?? "").toLowerCase();
+      return name.includes(needle) || id.includes(needle) || nfeKey.includes(needle);
     });
-  }, [data?.purchaseOrders, q, status]);
+  }, [data?.purchaseOrders, q, status, onlyWithNfe]);
 
   const columns: Column<any>[] = [
     {
@@ -170,6 +103,28 @@ const suppliers = supData?.suppliers ?? [];
       cell: (po) => money(po.total ?? 0),
     },
     {
+      key: "receivedAt",
+      header: "Recebido em",
+      headerClassName: "w-[160px]",
+      cell: (po) =>
+        po?.receivedAt
+          ? new Date(po.receivedAt).toLocaleDateString("pt-BR")
+          : <span className="text-xs text-muted-foreground">—</span>,
+    },
+    {
+      key: "nfe",
+      header: "NF-e",
+      headerClassName: "w-[160px]",
+      cell: (po) =>
+        po?.nfeKey ? (
+          <span className="font-mono text-xs text-muted-foreground">
+            {String(po.nfeKey).slice(0, 10)}…{String(po.nfeKey).slice(-6)}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
+    },
+    {
       key: "status",
       header: "Status",
       headerClassName: "w-[140px]",
@@ -178,12 +133,41 @@ const suppliers = supData?.suppliers ?? [];
     {
       key: "actions",
       header: "",
-      headerClassName: "w-[120px]",
+      headerClassName: "w-[180px]",
       className: "text-right",
       cell: (po) => (
-        <Link href={`/compras/pedidos/${po.id}`} onClick={(e) => e.stopPropagation()}>
-          <Button variant="secondary" size="sm">Abrir</Button>
-        </Link>
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              const ref = po?.nfeKey ? `NFE:${po.nfeKey}` : `PO:${po.id}`;
+              window.location.href = `/estoque/movimentacoes?ref=${encodeURIComponent(ref)}`;
+            }}
+          >
+            Ledger
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async (e) => {
+              e.stopPropagation();
+              const ref = po?.nfeKey ? `NFE:${po.nfeKey}` : `PO:${po.id}`;
+              try {
+                await navigator.clipboard.writeText(ref);
+                toast.success("Referência copiada: " + ref);
+              } catch {
+                toast.error("Não foi possível copiar para a área de transferência.");
+              }
+            }}
+          >
+            Copiar ref
+          </Button>
+          <Link href={`/compras/pedidos/${po.id}`} onClick={(e) => e.stopPropagation()}>
+            <Button variant="secondary" size="sm">Abrir</Button>
+          </Link>
+        </div>
       ),
     },
   ];
@@ -194,36 +178,15 @@ const suppliers = supData?.suppliers ?? [];
         title="Compras"
         subtitle="Pedidos de compra com status, totais e ações. Padrão visual ERP (tabela + filtros + badge)."
         actions={
-          <>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={isImportingNfe}
-              onClick={onPickNfeClick}
-            >
-              {isImportingNfe ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  Importando...
-                </>
-              ) : (
-                "Importar NF-e (XML)"
-              )}
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link href="/compras/importar-nfe">Importar NF-e (XML)</Link>
             </Button>
-            <Link href="/cadastros/fornecedores">
-              <Button variant="secondary">Fornecedores</Button>
-            </Link>
-          </>
+            <Button asChild variant="secondary">
+              <Link href="/cadastros/fornecedores">Fornecedores</Link>
+            </Button>
+          </div>
         }
-      />
-
-      <input
-        ref={nfeFileRef}
-        type="file"
-        accept=".xml,application/xml,text/xml"
-        className="hidden"
-        aria-hidden
-        onChange={(e) => handlePickNfe(e.target.files?.[0] ?? null)}
       />
 
       <Card>
@@ -231,6 +194,9 @@ const suppliers = supData?.suppliers ?? [];
           <CardTitle>Novo pedido de compra</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="text-xs text-muted-foreground">
+            Se você já tem a NF-e em XML, pode importar e criar o pedido automaticamente.
+          </div>
           <div className="grid gap-3 md:grid-cols-[1fr_220px] md:items-center">
             <select
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -245,8 +211,11 @@ const suppliers = supData?.suppliers ?? [];
             </select>
 
             <div className="flex flex-col gap-2 md:flex-row md:justify-end">
+              <Button asChild variant="outline" className="w-full md:w-auto">
+                <Link href="/compras/importar-nfe">Importar NF-e (XML)</Link>
+              </Button>
               <Button
-                disabled={!supplierId || mut.isPending || isImportingNfe}
+                disabled={!supplierId || mut.isPending}
                 onClick={() => mut.mutate({ supplierId })}
                 className="w-full md:w-auto"
               >
@@ -281,12 +250,22 @@ const suppliers = supData?.suppliers ?? [];
             <div className="text-xs text-muted-foreground ml-1">
               Mostrando {filtered.length} de {(data?.purchaseOrders ?? []).length}
             </div>
+
+            <label className="ml-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={onlyWithNfe}
+                onChange={(e) => setOnlyWithNfe(e.target.checked)}
+              />
+              Somente com NF-e
+            </label>
           </>
         }
         rightSlot={
           <Button
             variant="secondary"
-            onClick={() => { setQ(""); setStatus("ALL"); }}
+            onClick={() => { setQ(""); setStatus("ALL"); setOnlyWithNfe(false); }}
           >
             Limpar filtros
           </Button>

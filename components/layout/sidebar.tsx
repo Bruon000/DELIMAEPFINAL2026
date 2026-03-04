@@ -6,11 +6,10 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   ShoppingCart,
+  Truck,
   Factory,
   Package,
   Wallet,
-  FileText,
-  Bot,
   ChevronLeft,
   ChevronRight,
   Settings,
@@ -39,11 +38,18 @@ const mainNav: NavItem[] = [
     children: [
       { title: "Pedidos", href: "/pedidos" },
       { title: "Orçamentos", href: "/orcamentos" },
-    
-  { title: "Comercial - Clientes", href: "/comercial/clientes" },
-  { title: "Comercial - Orçamentos", href: "/comercial/orcamentos" },
-  { title: "Comercial - Pedidos", href: "/comercial/pedidos" },
-],
+      { title: "Clientes", href: "/clientes" },
+    ],
+  },
+
+  {
+    title: "Compras",
+    href: "/compras/pedidos",
+    icon: Truck,
+    children: [
+      { title: "Pedidos de Compra", href: "/compras/pedidos" },
+      { title: "Importar NF-e (XML)", href: "/compras/importar-nfe" },
+    ],
   },
 
   {
@@ -52,7 +58,6 @@ const mainNav: NavItem[] = [
     icon: Factory,
     children: [
       { title: "Ordens de Produção", href: "/producao/ops" },
-      { title: "Apontamentos", href: "/producao/apontamentos" },
     ],
   },
 
@@ -80,15 +85,6 @@ const mainNav: NavItem[] = [
       { title: "Contas a Pagar", href: "/financeiro/contas-pagar" },
     ],
   },
-
-  {
-    title: "Fiscal",
-    href: "/fiscal",
-    icon: FileText,
-    children: [{ title: "Notas Fiscais", href: "/fiscal/notas" }],
-  },
-
-  { title: "IA Copilot", href: "/copilot", icon: Bot },
 ];
 
 const bottomNav: NavItem[] = [
@@ -103,7 +99,12 @@ const bottomNav: NavItem[] = [
       { title: "Fornecedores", href: "/cadastros/fornecedores" },
     ],
   },
-  { title: "Configurações", href: "/configuracoes", icon: Settings },
+  {
+    title: "Configurações",
+    href: "/configuracoes",
+    icon: Settings,
+    children: [{ title: "Preços", href: "/configuracoes/precos" }],
+  },
 ];
 
 export function Sidebar() {
@@ -113,10 +114,12 @@ export function Sidebar() {
 
   const [expandedModules, setExpandedModules] = React.useState<string[]>([
     "Comercial",
+    "Compras",
     "Produção",
     "Estoque",
     "Financeiro",
     "Cadastros",
+    "Configurações",
   ]);
 
   const toggleModule = (title: string) => {
