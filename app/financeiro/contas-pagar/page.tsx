@@ -44,6 +44,17 @@ async function markPaid(id: string) {
   return data;
 }
 
+async function cancelPayable(id: string) {
+  const res = await fetch(`/api/accounts-payable/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "CANCELED" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao cancelar");
+  return data;
+}
+
 export default function ContasPagarPage() {
   const qc = useQueryClient();
   const [q, setQ] = React.useState("");
@@ -82,6 +93,15 @@ export default function ContasPagarPage() {
     onError: (e: any) => toast.error(e?.message ?? "Erro ao marcar pago"),
   });
 
+  const cancelMut = useMutation({
+    mutationFn: (id: string) => cancelPayable(id),
+    onSuccess: async () => {
+      toast.success("Despesa cancelada.");
+      await qc.invalidateQueries({ queryKey: ["accounts-payable"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao cancelar"),
+  });
+
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
     return items.filter((x: any) => {
@@ -108,17 +128,30 @@ export default function ContasPagarPage() {
       headerClassName: "w-[160px]",
       className: "text-right",
       cell: (r) => (
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={String(r.status ?? "") === "PAID" || paidMut.isPending}
-          onClick={(e) => {
-            e.stopPropagation();
-            paidMut.mutate(r.id);
-          }}
-        >
-          {String(r.status ?? "") === "PAID" ? "Pago" : "Marcar pago"}
-        </Button>
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={String(r.status ?? "") === "PAID" || String(r.status ?? "") === "CANCELED" || paidMut.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              paidMut.mutate(r.id);
+            }}
+          >
+            {String(r.status ?? "") === "PAID" ? "Pago" : "Marcar pago"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={String(r.status ?? "") === "PAID" || String(r.status ?? "") === "CANCELED" || cancelMut.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              cancelMut.mutate(r.id);
+            }}
+          >
+            Cancelar
+          </Button>
+        </div>
       ),
     },
   ];

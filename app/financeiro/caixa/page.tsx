@@ -58,6 +58,17 @@ async function closeCash(closingBalance: number) {
   return data;
 }
 
+async function closeCashConfirmed(closingBalance: number) {
+  const res = await fetch("/api/cash/close", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ closingBalance, confirm: true }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message ?? data.error ?? "Erro ao fechar");
+  return data;
+}
+
 async function postTransaction(payload: { type: "IN" | "OUT"; amount: number; description?: string; reference?: string }) {
   const res = await fetch("/api/cash/transactions", {
     method: "POST",
@@ -88,6 +99,9 @@ export default function CaixaPage() {
   const [openingBalance, setOpeningBalance] = React.useState(0);
   const [closingBalance, setClosingBalance] = React.useState(0);
 
+  const [closeConfirmOpen, setCloseConfirmOpen] = React.useState(false);
+  const [closeMismatch, setCloseMismatch] = React.useState<any>(null);
+
   const [txOpen, setTxOpen] = React.useState(false);
   const [newType, setNewType] = React.useState<"IN" | "OUT">("IN");
   const [newAmount, setNewAmount] = React.useState("0");
@@ -111,7 +125,24 @@ export default function CaixaPage() {
       await qc.invalidateQueries({ queryKey: ["cash-session"] });
       await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro"),
+    onError: (e: any) => {
+      const msg = e?.message ?? "Erro";
+      // Se a API retornou 409, o fetch acima lançou só "closing_balance_mismatch".
+      // Vamos tentar repetir chamando /api/cash/close e capturar corpo:
+      toast.error(msg);
+    },
+  });
+
+  const closeConfirmMut = useMutation({
+    mutationFn: () => closeCashConfirmed(closingBalance),
+    onSuccess: async () => {
+      toast.success("Caixa fechado (confirmado).");
+      setCloseConfirmOpen(false);
+      setCloseMismatch(null);
+      await qc.invalidateQueries({ queryKey: ["cash-session"] });
+      await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao fechar"),
   });
 
   const txMut = useMutation({
@@ -224,7 +255,28 @@ export default function CaixaPage() {
 
               <div className="flex gap-2 items-center">
                 <Input type="number" value={closingBalance} onChange={(e) => setClosingBalance(Number(e.target.value))} />
-                <Button onClick={() => closeMut.mutate()} disabled={closeMut.isPending}>
+                <Button
+                  onClick={async () => {
+                    try {
+                      await closeMut.mutateAsync();
+                    } catch {
+                      // Re-faz a chamada para capturar o corpo do 409 e abrir o dialog
+                      const res = await fetch("/api/cash/close", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ closingBalance }),
+                      });
+                      const data = await res.json().catch(() => ({}));
+                      if (res.status === 409 && data?.error === "closing_balance_mismatch") {
+                        setCloseMismatch(data);
+                        setCloseConfirmOpen(true);
+                        return;
+                      }
+                      toast.error(data?.message ?? data?.error ?? "Erro ao fechar");
+                    }
+                  }}
+                  disabled={closeMut.isPending}
+                >
                   {closeMut.isPending ? "Fechando..." : "Fechar caixa"}
                 </Button>
               </div>
@@ -313,6 +365,32 @@ export default function CaixaPage() {
             <Button variant="outline" onClick={() => setTxOpen(false)}>Cancelar</Button>
             <Button onClick={() => txMut.mutate()} disabled={txMut.isPending}>
               {txMut.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar fechamento</DialogTitle>
+            <DialogDescription>
+              O saldo informado diverge do saldo esperado. Confirme se deseja fechar mesmo assim.
+            </DialogDescription>
+          </DialogHeader>
+
+          {closeMismatch ? (
+            <div className="text-sm space-y-1">
+              <div><b>Esperado:</b> R$ {Number(closeMismatch.expectedBalance ?? 0).toFixed(2)}</div>
+              <div><b>Informado:</b> R$ {Number(closeMismatch.closingBalance ?? 0).toFixed(2)}</div>
+              <div><b>Diferença:</b> R$ {Number(closeMismatch.delta ?? 0).toFixed(2)}</div>
+            </div>
+          ) : null}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCloseConfirmOpen(false)}>Cancelar</Button>
+            <Button onClick={() => closeConfirmMut.mutate()} disabled={closeConfirmMut.isPending}>
+              {closeConfirmMut.isPending ? "Fechando..." : "Confirmar e fechar"}
             </Button>
           </DialogFooter>
         </DialogContent>

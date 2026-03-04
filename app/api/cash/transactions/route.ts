@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -76,6 +77,17 @@ export async function POST(req: Request) {
     } as any,
     select: { id: true },
   } as any);
+
+  await writeAuditLog({
+    companyId,
+    userId,
+    action: "CASH_TX_CREATED",
+    entity: "CASH_SESSION",
+    entityId: open.id,
+    payload: { type, amount, description, reference, txId: tx.id },
+    ip: req.headers.get("x-forwarded-for") ?? undefined,
+    userAgent: req.headers.get("user-agent") ?? undefined,
+  });
 
   return NextResponse.json({ ok: true, id: tx.id }, { status: 201 });
 }

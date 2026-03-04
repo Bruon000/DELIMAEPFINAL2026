@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -21,6 +22,17 @@ export async function POST(req: Request) {
   const cashSession = await prisma.cashSession.create({
     data: { companyId, userId, openingBalance } as any,
   } as any);
+
+  await writeAuditLog({
+    companyId,
+    userId,
+    action: "CASH_OPENED",
+    entity: "CASH_SESSION",
+    entityId: cashSession.id,
+    payload: { openingBalance },
+    ip: req.headers.get("x-forwarded-for") ?? undefined,
+    userAgent: req.headers.get("user-agent") ?? undefined,
+  });
 
   return NextResponse.json({ cashSession }, { status: 201 });
 }

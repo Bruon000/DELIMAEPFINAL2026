@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(req: Request, ctx: { params: { id: string } }) {
   const session = await getSession();
@@ -54,6 +55,15 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   if (body?.status != null) {
     const s = String(body.status ?? "").toUpperCase();
     if (!["PENDING", "PAID", "OVERDUE", "CANCELED"].includes(s)) return NextResponse.json({ error: "status_invalid" }, { status: 400 });
+
+    // Regra: não permitir cancelar se já está pago
+    if (s === "CANCELED" && String(exists.status ?? "") === "PAID") {
+      return NextResponse.json(
+        { error: "cannot_cancel_paid", message: "Não é possível cancelar uma despesa já paga." },
+        { status: 400 }
+      );
+    }
+
     data.status = s as any;
     if (s === "PAID" && !exists.paidAt) data.paidAt = new Date();
     if (s !== "PAID") data.paidAt = null;
@@ -64,6 +74,19 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
     data,
     select: { id: true },
   } as any);
+
+  if (data.status === "CANCELED") {
+    await writeAuditLog({
+      companyId,
+      userId: session.user.id as string,
+      action: "AP_CANCELED",
+      entity: "ACCOUNTS_PAYABLE",
+      entityId: id,
+      payload: { prevStatus: exists.status, nextStatus: "CANCELED" },
+      ip: req.headers.get("x-forwarded-for") ?? undefined,
+      userAgent: req.headers.get("user-agent") ?? undefined,
+    });
+  }
 
   return NextResponse.json({ ok: true, id: updated.id });
 }
