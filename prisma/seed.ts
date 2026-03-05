@@ -71,6 +71,129 @@ async function main() {
     } as any);
   }
 
+  // =========================
+  // FISCAL (stub/seeds simples)
+  // =========================
+  // Obs: isso NÃO incrementa número de série. Apenas cadastra defaults.
+
+  const cfops = [
+    { code: "5101", description: "VENDA DE PRODUÇÃO DO ESTABELECIMENTO" },
+    { code: "6101", description: "VENDA DE PRODUÇÃO DO ESTABELECIMENTO (OUTRA UF)" },
+    { code: "5102", description: "VENDA DE MERCADORIA ADQUIRIDA OU RECEBIDA DE TERCEIROS" },
+    { code: "6102", description: "VENDA DE MERCADORIA ADQUIRIDA OU RECEBIDA DE TERCEIROS (OUTRA UF)" },
+  ];
+
+  for (const c of cfops) {
+    await prisma.fiscalCfop.upsert({
+      where: { code: c.code } as any,
+      update: { description: c.description } as any,
+      create: { code: c.code, description: c.description } as any,
+    } as any);
+  }
+
+  const csts = [
+    { code: "00", description: "Tributada integralmente" },
+    { code: "20", description: "Com redução de base de cálculo" },
+    { code: "40", description: "Isenta" },
+    { code: "41", description: "Não tributada" },
+    { code: "60", description: "ICMS cobrado anteriormente por substituição tributária" },
+  ];
+
+  for (const c of csts) {
+    await prisma.fiscalCst.upsert({
+      where: { code: c.code } as any,
+      update: { description: c.description } as any,
+      create: { code: c.code, description: c.description } as any,
+    } as any);
+  }
+
+  const csosns = [
+    { code: "101", description: "Tributada pelo Simples Nacional com permissão de crédito" },
+    { code: "102", description: "Tributada pelo Simples Nacional sem permissão de crédito" },
+    { code: "103", description: "Isenção do ICMS no Simples Nacional" },
+    { code: "201", description: "ST com permissão de crédito" },
+    { code: "202", description: "ST sem permissão de crédito" },
+    { code: "500", description: "ICMS cobrado anteriormente por ST (ou antecipação)" },
+    { code: "900", description: "Outros" },
+  ];
+
+  for (const c of csosns) {
+    await prisma.fiscalCsosn.upsert({
+      where: { code: c.code } as any,
+      update: { description: c.description } as any,
+      create: { code: c.code, description: c.description } as any,
+    } as any);
+  }
+
+  // NCM stub (poucos exemplos; depois a gente cria import/autocomplete robusto)
+  const ncms = [
+    { code: "73083000", description: "Estruturas e partes de estruturas, de ferro ou aço" },
+    { code: "73089010", description: "Portas, janelas e respectivos caixilhos, de ferro ou aço" },
+    { code: "73269090", description: "Outras obras de ferro ou aço" },
+    { code: "76101000", description: "Estruturas e partes de estruturas, de alumínio" },
+  ];
+
+  for (const n of ncms) {
+    await prisma.fiscalNcm.upsert({
+      where: { code: n.code } as any,
+      update: { description: n.description } as any,
+      create: { code: n.code, description: n.description } as any,
+    } as any);
+  }
+
+  const defaultCfop = await prisma.fiscalCfop.findUnique({ where: { code: "5101" } as any, select: { id: true } as any } as any);
+
+  // FiscalConfig (1 por empresa)
+  await prisma.fiscalConfig.upsert({
+    where: { companyId: company.id } as any,
+    update: {
+      environment: "HOMOLOG" as any,
+      useTradeNameOnInvoice: true,
+      useTradeNameOnRecipient: true,
+      showPaymentOnPrint: true,
+      contingencyEnabled: false,
+      icmsDesoneracaoEnabled: false,
+      defaultCfopId: defaultCfop?.id ?? null,
+    } as any,
+    create: {
+      companyId: company.id,
+      environment: "HOMOLOG" as any,
+      useTradeNameOnInvoice: true,
+      useTradeNameOnRecipient: true,
+      showPaymentOnPrint: true,
+      contingencyEnabled: false,
+      icmsDesoneracaoEnabled: false,
+      defaultCfopId: defaultCfop?.id ?? null,
+    } as any,
+  } as any);
+
+  // Séries (Softcom-like). NÃO consumimos/incrementamos aqui.
+  // Se já existir, não mexe nos números (respeita o estado atual).
+  const desiredSeries = [
+    { model: 55, serie: 1, isDefault: true }, // NF-e
+    { model: 65, serie: 1, isDefault: true }, // NFC-e
+  ];
+
+  for (const s of desiredSeries) {
+    const exists = await prisma.fiscalSeries.findUnique({
+      where: { companyId_model_serie: { companyId: company.id, model: s.model, serie: s.serie } } as any,
+      select: { id: true } as any,
+    } as any);
+
+    if (!exists) {
+      await prisma.fiscalSeries.create({
+        data: {
+          companyId: company.id,
+          model: s.model,
+          serie: s.serie,
+          initialNumber: 1,
+          currentNumber: 1,
+          isDefault: s.isDefault,
+        } as any,
+      } as any);
+    }
+  }
+
   console.log("Seed OK:", {
     admin: "admin@demo.com / admin123",
     company: company.name,

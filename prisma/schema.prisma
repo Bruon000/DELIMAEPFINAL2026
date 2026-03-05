@@ -35,6 +35,8 @@ model Company {
   financialCategories FinancialCategory[]
   costCenters         CostCenter[]
   fiscalConfig        FiscalConfig?
+  fiscalSeries        FiscalSeries[]
+  fiscalInvoices      FiscalInvoice[]
 
   pricingConfig  PricingConfig?
   notifications  Notification[]
@@ -291,6 +293,7 @@ model Product {
   updatedAt   DateTime            @updatedAt
 
   bom                  BOM?
+  fiscal               ProductFiscal?
   orderItems           OrderItem[]
   productionOrderItems ProductionOrderItem[]
   quoteItems           QuoteItem[]
@@ -759,30 +762,152 @@ model Boleto {
 
 // ========== 10) FISCAL (Stub) ==========
 
+enum FiscalEnvironment {
+  HOMOLOG
+  PROD
+}
+
 model FiscalConfig {
   id         String   @id @default(cuid())
   companyId  String   @unique
   company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   regime     String? // SIMPLES, LUCRO_PRESUMIDO, etc.
   certSerial String?
+  environment FiscalEnvironment @default(HOMOLOG)
+
+  // UX/Config inspirado no Softcom (não afeta numeração)
+  useTradeNameOnInvoice    Boolean @default(true)  // Nome Fantasia vs Razão Social (emitente)
+  useTradeNameOnRecipient  Boolean @default(true)  // Nome Fantasia vs Razão Social (destinatário)
+  showPaymentOnPrint       Boolean @default(true)
+  contingencyEnabled       Boolean @default(false)
+  icmsDesoneracaoEnabled   Boolean @default(false)
+
+  defaultCfopId String?
+  defaultCfop   FiscalCfop? @relation(fields: [defaultCfopId], references: [id], onDelete: SetNull)
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// Série NF-e (NÃO incrementa automaticamente; só armazenamos estado)
+model FiscalSeries {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Softcom-like: Modelo (55/65), Série, Número Inicial, Número Atual, Série Padrão
+  model         Int      @default(55) // 55=NF-e, 65=NFC-e
+  serie         Int
+  initialNumber Int      @default(1) // ex: 1 => "001" (formatação fica na UI)
+  currentNumber Int      @default(1) // ex: 20 => "020"
+  isDefault     Boolean  @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([companyId, model, serie])
+}
+
+// Catálogos (stub/seeds simples)
+model FiscalNcm {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products    ProductFiscal[]
+}
+
+model FiscalCfop {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  configs     FiscalConfig[]
+  products    ProductFiscal[]
+}
+
+model FiscalCst {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products    ProductFiscal[]
+}
+
+model FiscalCsosn {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products    ProductFiscal[]
+}
+
+// Fiscal do Produto (1:1 com Product; referência por company via product.companyId)
+model ProductFiscal {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // 0 - Nacional (padrão). Mantemos int para compatibilidade com tabela origem
+  origin    Int      @default(0)
+
+  ncmId     String?
+  ncm       FiscalNcm? @relation(fields: [ncmId], references: [id], onDelete: SetNull)
+
+  cfopId    String?
+  cfop      FiscalCfop? @relation(fields: [cfopId], references: [id], onDelete: SetNull)
+
+  cstId     String?
+  cst       FiscalCst? @relation(fields: [cstId], references: [id], onDelete: SetNull)
+
+  csosnId   String?
+  csosn     FiscalCsosn? @relation(fields: [csosnId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ncmId])
+  @@index([cfopId])
+  @@index([cstId])
+  @@index([csosnId])
 }
 
 model FiscalInvoice {
   id        String    @id @default(cuid())
   companyId String
   orderId   String?
-  number    String?
-  key       String?
-  status    String // PENDING, ISSUED, CANCELLED
-  type      String // NF-E, NFS-E
+  // Integração plugável (Nuvem Fiscal / outros)
+  docType   String // NFE, NFCE, CTE, MDFE, NFSE, etc.
+  model     Int?   // 55=NF-e, 65=NFC-e (quando aplicável)
+
+  externalId String? // id do documento no emissor
+  number     String? // número retornado/autorizado
+  serie      Int?    // série retornada/usada
+  key        String? // chave de acesso
+
+  status    String // DRAFT, PENDING, AUTHORIZED, REJECTED, CANCELLED, CLOSED
   issuedAt  DateTime?
+
+  pdfUrl    String?
+  xmlUrl    String?
   payload   Json?
+  sentToAccountantAt   DateTime?
+  sentToAccountantNote String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@unique([companyId, type, key])
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, docType, key])
+  @@index([companyId, docType, status])
 }
 
 // ========== 11) NOTIFICAÇÕES ==========

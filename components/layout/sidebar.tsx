@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Settings,
   Boxes,
+  ReceiptText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,16 @@ const mainNav: NavItem[] = [
       { title: "Contas a Pagar", href: "/financeiro/contas-pagar" },
     ],
   },
+
+  {
+    title: "Fiscal",
+    href: "/fiscal",
+    icon: ReceiptText,
+    children: [
+      { title: "Documentos", href: "/fiscal/documentos" },
+      { title: "Contabilidade", href: "/fiscal/contabilidade" },
+    ],
+  },
 ];
 
 const bottomNav: NavItem[] = [
@@ -119,6 +130,7 @@ export function Sidebar() {
     "Produção",
     "Estoque",
     "Financeiro",
+    "Fiscal",
     "Cadastros",
     "Configurações",
   ]);
@@ -245,6 +257,8 @@ export function Sidebar() {
                 if (it.title === "Estoque") return role === "VENDEDOR" || role === "PRODUCAO" || role === "ADMIN";
                 // Financeiro: CAIXA/ADMIN/CONTADOR
                 if (it.title === "Financeiro") return role === "CAIXA" || role === "ADMIN" || role === "CONTADOR";
+                // Fiscal: CAIXA/ADMIN (contador é externo e não terá acesso)
+                if (it.title === "Fiscal") return role === "CAIXA" || role === "ADMIN";
                 return true;
               })
               .map(renderItem)}
