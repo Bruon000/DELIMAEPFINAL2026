@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 export async function PATCH(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const gate = await requireRole(["ADMIN"]);
+  if (!gate.ok) return gate.res;
+  const companyId = gate.session.user!.companyId as string;
 
   const id = ctx.params.id;
   const body = await req.json().catch(() => null);
@@ -15,7 +15,7 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   if (body?.document != null) data.document = String(body.document).trim() || null;
   if (body?.email != null) data.email = String(body.email).trim() || null;
   if (body?.phone != null) data.phone = String(body.phone).trim() || null;
-  
+
   if (body?.tradeName != null) data.tradeName = String(body.tradeName).trim() || null;
   if (body?.ie != null) data.ie = String(body.ie).trim() || null;
   if (body?.im != null) data.im = String(body.im).trim() || null;
@@ -25,7 +25,8 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   if (body?.addressDistrict != null) data.addressDistrict = String(body.addressDistrict).trim() || null;
   if (body?.addressCity != null) data.addressCity = String(body.addressCity).trim() || null;
   if (body?.addressState != null) data.addressState = String(body.addressState).trim() || null;
-  if (body?.addressZip != null) data.addressZip = String(body.addressZip).trim() || null;if (body?.isActive != null) data.isActive = !!body.isActive;
+  if (body?.addressZip != null) data.addressZip = String(body.addressZip).trim() || null;
+  if (body?.isActive != null) data.isActive = !!body.isActive;
 
   const client = await prisma.client.findFirst({ where: { id, companyId, deletedAt: null } } as any);
   if (!client) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -34,31 +35,31 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
     where: { id } as any,
     data,
     select: {
-  id: true,
-  name: true,
-  tradeName: true,
-  document: true,
-  ie: true,
-  im: true,
-  email: true,
-  phone: true,
-  addressStreet: true,
-  addressNumber: true,
-  addressDistrict: true,
-  addressCity: true,
-  addressState: true,
-  addressZip: true,
-  isActive: true,
-},
+      id: true,
+      name: true,
+      tradeName: true,
+      document: true,
+      ie: true,
+      im: true,
+      email: true,
+      phone: true,
+      addressStreet: true,
+      addressNumber: true,
+      addressDistrict: true,
+      addressCity: true,
+      addressState: true,
+      addressZip: true,
+      isActive: true,
+    },
   } as any);
 
   return NextResponse.json({ client: updated });
 }
 
 export async function DELETE(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const gate = await requireRole(["ADMIN"]);
+  if (!gate.ok) return gate.res;
+  const companyId = gate.session.user!.companyId as string;
 
   const id = ctx.params.id;
 
@@ -72,5 +73,3 @@ export async function DELETE(req: Request, ctx: { params: { id: string } }) {
 
   return NextResponse.json({ ok: true });
 }
-
-

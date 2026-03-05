@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,10 @@ async function lookupCnpj(cnpj: string) {
 }
 
 export default function ClientesPage() {
+  const { data: session } = useSession();
+  const role = String((session as any)?.user?.role ?? "");
+  const isAdmin = role === "ADMIN";
+
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["clients"], queryFn: fetchClients });
 
@@ -110,6 +115,11 @@ export default function ClientesPage() {
   const [editing, setEditing] = React.useState<any>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
 
+  // vendedor não entra em modo edição
+  React.useEffect(() => {
+    if (!isAdmin && editing) setEditing(null);
+  }, [isAdmin, editing]);
+
   const current = editing ?? form;
   const isCnpj = String(current?.docType ?? "CPF") === "CNPJ";
 
@@ -119,7 +129,6 @@ export default function ClientesPage() {
   };
 
   const onChangeDocType = (t: "CPF" | "CNPJ") => {
-    // ao trocar para CPF, limpamos os campos "de empresa" pra não poluir
     const patch: any = { docType: t };
     if (t === "CPF") {
       patch.tradeName = "";
@@ -168,7 +177,6 @@ export default function ClientesPage() {
   const cnpjMut = useMutation({
     mutationFn: (cnpj: string) => lookupCnpj(cnpj),
     onSuccess: (d: any) => {
-      // só preenche automático se estiver em CNPJ
       if (!isCnpj) {
         setMsg("Troque para CNPJ para usar o preenchimento automático.");
         return;
@@ -197,11 +205,9 @@ export default function ClientesPage() {
   });
 
   const payloadForSave = (obj: any) => {
-    // sempre manda docType só pro front; API pode ignorar
     const p: any = { ...obj };
     delete p.docType;
 
-    // se for CPF, manda só o essencial (evita salvar lixo em campos de empresa)
     if (String(obj?.docType ?? "CPF") === "CPF") {
       p.tradeName = "";
       p.ie = "";
@@ -220,8 +226,9 @@ export default function ClientesPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Clientes</h1>
+
         <Button asChild variant="outline">
-          <Link href="/cadastros">Voltar</Link>
+          <Link href={isAdmin ? "/cadastros" : "/comercial/venda"}>Voltar</Link>
         </Button>
       </div>
 
@@ -335,7 +342,7 @@ export default function ClientesPage() {
               >
                 {createMut.isPending ? "Salvando..." : "Criar"}
               </Button>
-            ) : (
+            ) : isAdmin ? (
               <>
                 <Button
                   onClick={() => updateMut.mutate({ id: editing.id, payload: payloadForSave(editing) })}
@@ -345,8 +352,14 @@ export default function ClientesPage() {
                 </Button>
                 <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
               </>
-            )}
+            ) : null}
           </div>
+
+          {!isAdmin ? (
+            <div className="text-xs text-muted-foreground">
+              Obs.: vendedor pode cadastrar clientes, mas alterações/exclusões são feitas pelo Admin.
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -365,10 +378,21 @@ export default function ClientesPage() {
                   {c.document ? `Doc: ${c.document} · ` : ""}{c.email ? `Email: ${c.email} · ` : ""}{c.phone ? `Tel: ${c.phone}` : ""}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditing({ ...c, docType: (onlyDigits(String(c.document ?? "")).length === 14 ? "CNPJ" : "CPF") })}>Editar</Button>
-                <Button variant="destructive" size="sm" onClick={() => delMut.mutate(c.id)} disabled={delMut.isPending}>Remover</Button>
-              </div>
+
+              {isAdmin ? (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditing({ ...c, docType: (onlyDigits(String(c.document ?? "")).length === 14 ? "CNPJ" : "CPF") })}
+                  >
+                    Editar
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => delMut.mutate(c.id)} disabled={delMut.isPending}>
+                    Remover
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ))}
           {clients.length === 0 && !isLoading && <p className="text-muted-foreground">Sem clientes.</p>}
