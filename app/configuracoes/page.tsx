@@ -10,6 +10,11 @@ export default function ConfiguracoesPage() {
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="border rounded p-4 space-y-2">
+          <div className="font-medium">Empresa & Fiscal</div>
+          <div className="text-sm text-muted-foreground">Dados da empresa + base fiscal (pré emissor).</div>
+          <Button asChild variant="outline"><Link href="/configuracoes/empresa">Abrir</Link></Button>
+        </div>
+        <div className="border rounded p-4 space-y-2">
           <div className="font-medium">Preços (Premium)</div>
           <div className="text-sm text-muted-foreground">Defina regra de sugestão (margem/markup/arredondamento).</div>
           <Button asChild variant="outline"><Link href="/configuracoes/precos">Abrir</Link></Button>

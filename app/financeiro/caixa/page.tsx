@@ -26,6 +26,27 @@ async function fetchSession() {
   return res.json();
 }
 
+async function fetchAR(params: { q?: string; status?: string }) {
+  const sp = new URLSearchParams();
+  sp.set("status", params.status ?? "PENDING");
+  if (params.q) sp.set("q", params.q);
+  const res = await fetch(`/api/accounts-receivable?${sp.toString()}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? data?.message ?? "Erro ao carregar contas a receber");
+  return data as { ars: any[] };
+}
+
+async function receiveAR(payload: { accountsReceivableId: string; note?: string }) {
+  const res = await fetch("/api/cash/receive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao receber");
+  return data;
+}
+
 async function fetchTransactions(params: { q?: string; type?: string; from?: string; to?: string }) {
   const sp = new URLSearchParams();
   if (params.q) sp.set("q", params.q);
@@ -117,6 +138,11 @@ export default function CaixaPage() {
   const [outReason, setOutReason] = React.useState("");
   const [outRef, setOutRef] = React.useState("");
 
+  const [recvOpen, setRecvOpen] = React.useState(false);
+  const [arQ, setArQ] = React.useState("");
+  const [recvNote, setRecvNote] = React.useState("");
+  const [selectedArId, setSelectedArId] = React.useState<string | null>(null);
+
   const openMut = useMutation({
     mutationFn: () => openCash(openingBalance),
     onSuccess: async () => {
@@ -202,6 +228,28 @@ export default function CaixaPage() {
     onError: (e: any) => toast.error(e?.message ?? "Erro ao registrar saída"),
   });
 
+  const arListQ = useQuery({
+    queryKey: ["accounts-receivable", { arQ }],
+    queryFn: () => fetchAR({ q: arQ.trim() || undefined, status: "PENDING" }),
+    enabled: recvOpen,
+  });
+  const ars = arListQ.data?.ars ?? [];
+
+  const recvMut = useMutation({
+    mutationFn: () => receiveAR({ accountsReceivableId: String(selectedArId), note: recvNote.trim() || undefined }),
+    onSuccess: async () => {
+      toast.success("Recebimento registrado (IN).");
+      setRecvOpen(false);
+      setSelectedArId(null);
+      setRecvNote("");
+      setArQ("");
+      await qc.invalidateQueries({ queryKey: ["cash-session"] });
+      await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
+      await qc.invalidateQueries({ queryKey: ["accounts-receivable"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao receber"),
+  });
+
   const sumIn = txs.filter((t: any) => t.type === "IN").reduce((s: number, t: any) => s + Number(t.amount ?? 0), 0);
   const sumOut = txs.filter((t: any) => t.type === "OUT").reduce((s: number, t: any) => s + Number(t.amount ?? 0), 0);
   const movement = sumIn - sumOut;
@@ -243,6 +291,15 @@ export default function CaixaPage() {
                 Abrir
               </Link>
             ) : null}
+            {t.reference && String(t.reference).startsWith("AR:") ? (
+              <Link
+                href={`/financeiro/recebimentos?q=${encodeURIComponent(String(t.reference).slice(3))}`}
+                onClick={(e) => e.stopPropagation()}
+                className="underline"
+              >
+                Abrir
+              </Link>
+            ) : null}
           </div>
         </div>
       ),
@@ -264,6 +321,14 @@ export default function CaixaPage() {
               }}
             >
               Nova transação
+            </Button>
+            <Button
+              onClick={() => {
+                if (!cashSession) return toast.error("Abra o caixa antes de receber pagamentos.");
+                setRecvOpen(true);
+              }}
+            >
+              Receber
             </Button>
             <Button
               variant="outline"
@@ -370,7 +435,11 @@ export default function CaixaPage() {
             columns={columns}
             rowKey={(r) => r.id}
             emptyTitle={txQ.isLoading ? "Carregando..." : "Sem transações"}
-            emptyHint={txQ.isLoading ? "Buscando dados…" : "Lance uma transação manual para registrar entradas/saídas."}
+            emptyHint={
+              txQ.isLoading
+                ? "Buscando dados…"
+                : "Use \"Receber\" para registrar pagamentos (IN) a partir de AR, ou \"Saída manual\" para despesas (OUT)."
+            }
           />
         </CardContent>
       </Card>
@@ -480,6 +549,73 @@ export default function CaixaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={recvOpen} onOpenChange={setRecvOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Receber pagamento</DialogTitle>
+            <DialogDescription>
+              Selecione um título (AR) pendente e confirme para registrar uma entrada (IN) no caixa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={arQ}
+                onChange={(e) => setArQ(e.target.value)}
+                placeholder="Buscar por cliente, id do AR ou id do pedido..."
+              />
+              <Input
+                value={recvNote}
+                onChange={(e) => setRecvNote(e.target.value)}
+                placeholder="Observação (opcional)"
+              />
+            </div>
+
+            <div className="max-h-[360px] overflow-auto rounded-md border">
+              {arListQ.isLoading ? (
+                <div className="p-3 text-sm text-muted-foreground">Carregando...</div>
+              ) : ars.length === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground">Nenhum AR pendente encontrado.</div>
+              ) : (
+                <div className="divide-y">
+                  {ars.map((ar: any) => {
+                    const client = ar?.order?.client?.name ?? "Cliente";
+                    const amount = Number(ar.amount ?? 0).toFixed(2);
+                    const isSel = selectedArId === ar.id;
+                    return (
+                      <button
+                        key={ar.id}
+                        type="button"
+                        className={`w-full p-3 text-left hover:bg-accent ${isSel ? "bg-primary/10" : ""}`}
+                        onClick={() => setSelectedArId(ar.id)}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-medium">{client}</div>
+                          <div className="tabular-nums">R$ {amount}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          AR: <span className="font-mono">{ar.id}</span>
+                          {ar.orderId ? <> · Pedido: <span className="font-mono">{ar.orderId}</span></> : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRecvOpen(false)}>Cancelar</Button>
+            <Button onClick={() => recvMut.mutate()} disabled={!selectedArId || recvMut.isPending}>
+              {recvMut.isPending ? "Recebendo..." : "Confirmar recebimento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

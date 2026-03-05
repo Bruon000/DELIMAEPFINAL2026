@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -36,6 +37,7 @@ const mainNav: NavItem[] = [
     href: "/comercial",
     icon: ShoppingCart,
     children: [
+      { title: "Iniciar Venda", href: "/comercial/venda" },
       { title: "Pedidos", href: "/pedidos" },
       { title: "Orçamentos", href: "/orcamentos" },
       { title: "Clientes", href: "/clientes" },
@@ -67,10 +69,6 @@ const mainNav: NavItem[] = [
     icon: Package,
     children: [
       { title: "Materiais", href: "/estoque/materiais" },
-      { title: "Entradas", href: "/estoque/entradas" },
-      { title: "Movimentações", href: "/estoque/movimentacoes" },
-      { title: "Reservas (por material)", href: "/estoque/reservas" },
-      { title: "Reservas (por pedido)", href: "/estoque/reservas-origem" },
       { title: "Crítico", href: "/estoque/critico" },
     ],
   },
@@ -108,6 +106,9 @@ const bottomNav: NavItem[] = [
 ];
 
 export function Sidebar() {
+  const { data: session } = useSession();
+  const role = String((session as any)?.user?.role ?? "");
+
   const pathname = usePathname();
   const isMobile = useMobile();
   const { collapsed, setCollapsed } = useSidebar();
@@ -232,11 +233,31 @@ export function Sidebar() {
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-            {mainNav.map(renderItem)}
+            {mainNav
+              .filter((it) => {
+                // Comercial / Clientes: VENDEDOR/ADMIN
+                if (it.title === "Comercial") return role === "VENDEDOR" || role === "ADMIN";
+                // Compras: ADMIN
+                if (it.title === "Compras") return role === "ADMIN";
+                // Produção: PRODUCAO/ADMIN
+                if (it.title === "Produção") return role === "PRODUCAO" || role === "ADMIN";
+                // Estoque: VENDEDOR/PRODUCAO/ADMIN
+                if (it.title === "Estoque") return role === "VENDEDOR" || role === "PRODUCAO" || role === "ADMIN";
+                // Financeiro: CAIXA/ADMIN/CONTADOR
+                if (it.title === "Financeiro") return role === "CAIXA" || role === "ADMIN" || role === "CONTADOR";
+                return true;
+              })
+              .map(renderItem)}
 
             <Separator className="my-2" />
 
-            {bottomNav.map(renderItem)}
+            {bottomNav
+              .filter((it) => {
+                if (it.title === "Cadastros") return role === "ADMIN";
+                if (it.title === "Configurações") return role === "ADMIN";
+                return true;
+              })
+              .map(renderItem)}
           </nav>
         </div>
       </aside>

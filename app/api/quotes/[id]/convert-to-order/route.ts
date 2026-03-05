@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 
 /**
  * POST /api/quotes/:id/convert-to-order
@@ -14,6 +15,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   const companyId = session.user.companyId as string;
   const userId = session.user.id as string;
+  const role = String(session.user.role ?? "");
   const quoteId = ctx.params.id;
 
   const quote: any = await prisma.quote.findFirst({
@@ -28,6 +30,25 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   if (!(quote.items?.length)) {
     return NextResponse.json({ ok: false, error: "empty_quote", message: "Orçamento sem itens." }, { status: 400 });
   }
+
+  const isLocked = quote.validUntil ? new Date(quote.validUntil) < new Date() : false;
+  if (isLocked && role !== "ADMIN") {
+    return NextResponse.json(
+      { error: "quote_locked", message: "Orçamento vencido (15 dias). Solicite desbloqueio ao ADMIN." },
+      { status: 423 }
+    );
+  }
+
+  await writeAuditLog({
+    companyId,
+    userId: session.user.id as string,
+    action: "QUOTE_CONVERT_TO_ORDER",
+    entity: "QUOTE",
+    entityId: quoteId,
+    payload: { lockedByValidUntil: isLocked },
+    ip: req.headers.get("x-forwarded-for") ?? undefined,
+    userAgent: req.headers.get("user-agent") ?? undefined,
+  });
 
   const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.create({

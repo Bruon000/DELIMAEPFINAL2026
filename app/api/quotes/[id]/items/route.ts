@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 function n(x: any) { return Number(x ?? 0); }
 
@@ -17,11 +17,11 @@ async function recalcQuote(tx: any, quoteId: string) {
 }
 
 export async function POST(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) {
-    return NextResponse.json({ ok: false, error: "unauthorized", message: "Sessão expirada. Faça login novamente." }, { status: 401 });
-  }
-  const companyId = session.user.companyId as string;
+  const rr = await requireRole(["ADMIN", "VENDEDOR"]);
+  if (!rr.ok) return rr.res;
+  const session = rr.session;
+  const companyId = session.user!.companyId as string;
+  const role = String((session.user as any)?.role ?? "");
   const quoteId = ctx.params.id;
 
   const body = await req.json().catch(() => null);
@@ -37,10 +37,20 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   // valida quote pertence a empresa
   const quote = await prisma.quote.findFirst({
     where: { id: quoteId, companyId, deletedAt: null } as any,
-    select: { id: true, status: true },
+    select: { id: true, status: true, validUntil: true },
   } as any);
   if (!quote) {
     return NextResponse.json({ ok: false, error: "not_found", message: "Orçamento não encontrado" }, { status: 404 });
+  }
+
+  // lock: vencido só ADMIN mexe
+  const validUntil = quote?.validUntil ? new Date(String(quote.validUntil)) : null;
+  const expired = validUntil ? validUntil.getTime() < Date.now() : false;
+  if (expired && role !== "ADMIN") {
+    return NextResponse.json(
+      { ok: false, error: "quote_locked", message: "Orçamento vencido. Apenas o Admin pode alterar ou desbloquear." },
+      { status: 423 }
+    );
   }
 
   const total = qty * unitPrice;
@@ -67,11 +77,11 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 }
 
 export async function DELETE(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) {
-    return NextResponse.json({ ok: false, error: "unauthorized", message: "Sessão expirada. Faça login novamente." }, { status: 401 });
-  }
-  const companyId = session.user.companyId as string;
+  const rr = await requireRole(["ADMIN", "VENDEDOR"]);
+  if (!rr.ok) return rr.res;
+  const session = rr.session;
+  const companyId = session.user!.companyId as string;
+  const role = String((session.user as any)?.role ?? "");
   const quoteId = ctx.params.id;
 
   const url = new URL(req.url);
@@ -82,10 +92,19 @@ export async function DELETE(req: Request, ctx: { params: { id: string } }) {
 
   const quote = await prisma.quote.findFirst({
     where: { id: quoteId, companyId, deletedAt: null } as any,
-    select: { id: true },
+    select: { id: true, validUntil: true },
   } as any);
   if (!quote) {
     return NextResponse.json({ ok: false, error: "not_found", message: "Orçamento não encontrado" }, { status: 404 });
+  }
+
+  const validUntil = quote?.validUntil ? new Date(String(quote.validUntil)) : null;
+  const expired = validUntil ? validUntil.getTime() < Date.now() : false;
+  if (expired && role !== "ADMIN") {
+    return NextResponse.json(
+      { ok: false, error: "quote_locked", message: "Orçamento vencido. Apenas o Admin pode alterar ou desbloquear." },
+      { status: 423 }
+    );
   }
 
   await prisma.$transaction(async (tx) => {

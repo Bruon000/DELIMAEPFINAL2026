@@ -87,7 +87,7 @@ async function lookupCnpj(cnpj: string) {
 export default function ClientesPage() {
   const { data: session } = useSession();
   const role = String((session as any)?.user?.role ?? "");
-  const isAdmin = role === "ADMIN";
+  const canManage = role === "ADMIN";
 
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["clients"], queryFn: fetchClients });
@@ -117,8 +117,8 @@ export default function ClientesPage() {
 
   // vendedor não entra em modo edição
   React.useEffect(() => {
-    if (!isAdmin && editing) setEditing(null);
-  }, [isAdmin, editing]);
+    if (!canManage && editing) setEditing(null);
+  }, [canManage, editing]);
 
   const current = editing ?? form;
   const isCnpj = String(current?.docType ?? "CPF") === "CNPJ";
@@ -228,7 +228,7 @@ export default function ClientesPage() {
         <h1 className="text-2xl font-bold">Clientes</h1>
 
         <Button asChild variant="outline">
-          <Link href={isAdmin ? "/cadastros" : "/comercial/venda"}>Voltar</Link>
+          <Link href={canManage ? "/cadastros" : "/comercial/venda"}>Voltar</Link>
         </Button>
       </div>
 
@@ -342,7 +342,7 @@ export default function ClientesPage() {
               >
                 {createMut.isPending ? "Salvando..." : "Criar"}
               </Button>
-            ) : isAdmin ? (
+            ) : canManage ? (
               <>
                 <Button
                   onClick={() => updateMut.mutate({ id: editing.id, payload: payloadForSave(editing) })}
@@ -355,7 +355,7 @@ export default function ClientesPage() {
             ) : null}
           </div>
 
-          {!isAdmin ? (
+          {!canManage ? (
             <div className="text-xs text-muted-foreground">
               Obs.: vendedor pode cadastrar clientes, mas alterações/exclusões são feitas pelo Admin.
             </div>
@@ -379,7 +379,7 @@ export default function ClientesPage() {
                 </div>
               </div>
 
-              {isAdmin ? (
+              {canManage ? (
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
@@ -392,7 +392,9 @@ export default function ClientesPage() {
                     Remover
                   </Button>
                 </div>
-              ) : null}
+              ) : (
+                <span className="text-xs text-muted-foreground">Somente cadastro</span>
+              )}
             </div>
           ))}
           {clients.length === 0 && !isLoading && <p className="text-muted-foreground">Sem clientes.</p>}

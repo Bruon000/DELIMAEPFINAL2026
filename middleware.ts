@@ -15,10 +15,32 @@ export default withAuth(
         if (!token) return false;
 
         const pathname = req.nextUrl.pathname;
+        const role = (token as { role?: string }).role ?? "";
 
         if (pathname.startsWith("/admin")) {
-          return (token as { role?: string }).role === "ADMIN";
+          return role === "ADMIN";
         }
+
+        // Cadastros (produtos/materiais/BOM/fornecedores etc): somente ADMIN
+        if (pathname.startsWith("/cadastros")) return role === "ADMIN";
+
+        // Financeiro: CAIXA/ADMIN/CONTADOR
+        if (pathname.startsWith("/financeiro")) return role === "CAIXA" || role === "ADMIN" || role === "CONTADOR";
+
+        // Compras: ADMIN (por enquanto)
+        if (pathname.startsWith("/compras")) return role === "ADMIN";
+
+        // Produção: PRODUCAO/ADMIN
+        if (pathname.startsWith("/producao")) return role === "PRODUCAO" || role === "ADMIN";
+
+        // Estoque: VENDEDOR/PRODUCAO/ADMIN (somente telas; API controla o resto)
+        if (pathname.startsWith("/estoque")) return role === "VENDEDOR" || role === "PRODUCAO" || role === "ADMIN";
+
+        // Clientes e Comercial: VENDEDOR/ADMIN
+        if (pathname.startsWith("/clientes") || pathname.startsWith("/comercial") || pathname.startsWith("/pedidos") || pathname.startsWith("/orcamentos")) {
+          return role === "VENDEDOR" || role === "ADMIN";
+        }
+
         return true;
       },
     },

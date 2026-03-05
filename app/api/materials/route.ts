@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const r = await requireRole(["ADMIN", "VENDEDOR"]);
+  if (!r.ok) return r.res;
+  const companyId = r.session.user!.companyId as string;
 
   const materials = await prisma.material.findMany({
     where: { companyId, deletedAt: null },
@@ -20,9 +20,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const r = await requireRole(["ADMIN"]);
+  if (!r.ok) return r.res;
+  const companyId = r.session.user!.companyId as string;
 
   const body = await req.json().catch(() => null);
 

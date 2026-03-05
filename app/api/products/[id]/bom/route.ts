@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 export async function GET(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const r = await requireRole(["ADMIN"]);
+  if (!r.ok) return r.res;
+  const companyId = r.session.user!.companyId as string;
 
   const productId = ctx.params.id;
 
@@ -20,7 +20,20 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   const bom = await prisma.bOM.findFirst({
     where: { productId },
     include: {
-      items: { include: { material: { select: { id: true, name: true, code: true } } }, orderBy: { createdAt: "asc" } },
+      items: {
+        include: {
+          material: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              currentCost: true,
+              unit: { select: { id: true, code: true, name: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   } as any);
 
@@ -28,9 +41,9 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
 }
 
 export async function PATCH(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const r = await requireRole(["ADMIN"]);
+  if (!r.ok) return r.res;
+  const companyId = r.session.user!.companyId as string;
 
   const productId = ctx.params.id;
   const body = await req.json().catch(() => null);

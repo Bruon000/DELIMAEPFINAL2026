@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
-import { Bell, Search, Plus, Hammer, BadgeDollarSign } from "lucide-react";
+import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -19,6 +20,8 @@ type SearchItem = {
 };
 
 export function Topbar({ title = "Dashboard", actions }: TopbarProps) {
+  const { data: session } = useSession();
+  const role = String((session as any)?.user?.role ?? "");
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState<SearchItem[]>([]);
@@ -90,26 +93,35 @@ export function Topbar({ title = "Dashboard", actions }: TopbarProps) {
           )}
         </div>
 
-        {/* Ações rápidas */}
-        <Button asChild variant="default" size="sm" className="gap-1">
-          <Link href="/comercial/pedidos/novo">
-            <Plus className="h-4 w-4" />
-            Novo pedido
-          </Link>
-        </Button>
+        {role === "VENDEDOR" ? (
+          <>
+            <Button asChild size="sm">
+              <Link href="/comercial/venda">Iniciar venda</Link>
+            </Button>
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/pedidos/novo">Novo pedido</Link>
+            </Button>
+          </>
+        ) : null}
 
-        <Button asChild variant="outline" size="sm" className="gap-1">
-          <Link href="/producao/ops">
-            <Hammer className="h-4 w-4" />
-            Nova OP
-          </Link>
-        </Button>
+        {(role === "ADMIN" || role === "PRODUCAO") ? (
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/producao/ops">Nova OP</Link>
+          </Button>
+        ) : null}
 
-        <Button asChild variant="outline" size="sm" className="gap-1">
-          <Link href="/financeiro/contas-receber">
-            <BadgeDollarSign className="h-4 w-4" />
-            Receber
-          </Link>
+        {(role === "CAIXA" || role === "ADMIN" || role === "CONTADOR") ? (
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/financeiro/caixa">Receber</Link>
+          </Button>
+        ) : null}
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+        >
+          Sair
         </Button>
 
         {actions}

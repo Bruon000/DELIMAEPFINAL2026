@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   const [email, setEmail] = React.useState("");
   const [name, setName] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [role, setRole] = React.useState("USER");
+  const [role, setRole] = React.useState("VENDEDOR");
   const [msg, setMsg] = React.useState<string | null>(null);
 
   const createMut = useMutation({
@@ -53,7 +53,7 @@ export default function AdminUsersPage() {
       setEmail("");
       setName("");
       setPassword("");
-      setRole("USER");
+      setRole("VENDEDOR");
       await qc.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
@@ -72,7 +72,18 @@ export default function AdminUsersPage() {
             <Input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
             <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
             <Input placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <Input placeholder="Role (ADMIN/USER)" value={role} onChange={(e) => setRole(e.target.value)} />
+            <select
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+            >
+              <option value="ADMIN">ADMIN</option>
+              <option value="VENDEDOR">VENDEDOR</option>
+              <option value="CAIXA">CAIXA</option>
+              <option value="PRODUCAO">PRODUCAO</option>
+              <option value="INSTALADOR">INSTALADOR</option>
+              <option value="CONTADOR">CONTADOR</option>
+            </select>
           </div>
           <Button onClick={() => createMut.mutate({ email, name, password, role })} disabled={createMut.isPending}>
             {createMut.isPending ? "Criando..." : "Criar"}

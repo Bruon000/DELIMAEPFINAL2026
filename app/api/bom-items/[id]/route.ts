@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 export async function PATCH(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const r = await requireRole(["ADMIN"]);
+  if (!r.ok) return r.res;
 
   const id = ctx.params.id;
   const body = await req.json().catch(() => null);
@@ -27,14 +27,33 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   return NextResponse.json({ item });
 }
 export async function DELETE(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const r = await requireRole(["ADMIN"]);
+  if (!r.ok) return r.res;
+  const companyId = r.session.user!.companyId as string;
 
   const id = ctx.params.id;
 
-  // (opcional) validar company via joins (MVP: delete direto)
+  // valida company via join: BOMItem -> BOM -> Product(companyId)
+  const item: any = await prisma.bOMItem.findFirst({
+    where: { id } as any,
+    include: {
+      bom: {
+        include: {
+          product: { select: { companyId: true, deletedAt: true } } as any,
+        } as any,
+      } as any,
+    } as any,
+  } as any);
+
+  if (!item) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (item?.bom?.product?.companyId !== companyId || item?.bom?.product?.deletedAt) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   await prisma.bOMItem.delete({ where: { id } as any } as any);
 
   return NextResponse.json({ ok: true });
 }
+
+
 

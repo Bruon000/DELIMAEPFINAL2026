@@ -7,6 +7,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+
+async function recalcCost(productId: string) {
+  const res = await fetch(`/api/products/${productId}/recalc-cost`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? "Erro ao recalcular custo");
+  return data;
+}
 
 async function fetchBom(productId: string) {
   const res = await fetch(`/api/products/${productId}/bom`);
@@ -50,6 +58,11 @@ async function updateBom(productId: string, payload: any) {
 }
 
 function pct(x: any) { return Number(x ?? 0); }
+function n(x: any) { return Number(x ?? 0); }
+function money(v: any) {
+  const x = n(v);
+  return x.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
 export default function BomPage() {
   const params = useParams();
@@ -86,6 +99,15 @@ export default function BomPage() {
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
+  const recalcMut = useMutation({
+    mutationFn: () => recalcCost(productId),
+    onSuccess: async () => {
+      toast.success("Custo recalculado no produto (via BOM).");
+      await qc.invalidateQueries({ queryKey: ["bom", productId] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao recalcular custo"),
+  });
+
   const saveBomMut = useMutation({
     mutationFn: (p: any) => updateBom(productId, p),
     onSuccess: async () => {
@@ -99,11 +121,29 @@ export default function BomPage() {
     if (data?.bom?.lossPercent != null) setLossGlobal(pct(data.bom.lossPercent));
   }, [data?.bom?.lossPercent]);
 
-  if (isLoading) return <div className="p-6">Carregando...</div>;
+  const product = data?.product ?? null;
+  const bom = data?.bom ?? null;
+  const items = React.useMemo(() => {
+    return (bom?.items ?? []) as any[];
+  }, [bom?.items]);
 
-  const product = data?.product;
-  const bom = data?.bom;
-  const items = bom?.items ?? [];
+  const lossG = pct(bom?.lossPercent);
+
+  const computed = React.useMemo(() => {
+    const rows = (items ?? []).map((it: any) => {
+      const qty = n(it.quantity);
+      const lossI = pct(it.lossPercent);
+      const cost = n(it.material?.currentCost);
+      const unit = it.material?.unit?.code ?? "";
+      const need = qty * (1 + lossI / 100) * (1 + lossG / 100);
+      const lineCost = need * cost;
+      return { ...it, _qty: qty, _lossI: lossI, _need: need, _unit: unit, _cost: cost, _lineCost: lineCost };
+    });
+    const totalCost = rows.reduce((s: number, r: any) => s + n(r._lineCost), 0);
+    return { rows, totalCost };
+  }, [items, lossG]);
+
+  if (isLoading) return <div className="p-6">Carregando...</div>;
 
   return (
     <div className="p-6 space-y-4">
@@ -139,6 +179,22 @@ export default function BomPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader><CardTitle>Resumo (custo estimado)</CardTitle></CardHeader>
+        <CardContent className="space-y-1">
+          <div><b>Perda global:</b> {Number(lossG).toFixed(2)}%</div>
+          <div><b>Custo estimado do BOM:</b> {money(computed.totalCost)}</div>
+          <div className="text-xs text-muted-foreground">
+            Cálculo: consumo real = qtd × (1 + perda item) × (1 + perda global), custo = consumo real × custo atual do material.
+          </div>
+          <div className="pt-2">
+            <Button variant="secondary" disabled={recalcMut.isPending} onClick={() => recalcMut.mutate()}>
+              {recalcMut.isPending ? "Recalculando..." : "Recalcular custo do produto"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
 
       <Card>
@@ -167,12 +223,17 @@ export default function BomPage() {
         <CardHeader><CardTitle>Itens do BOM</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {items.length === 0 && <p className="text-muted-foreground">Sem itens ainda.</p>}
-          {items.map((it: any) => (
+          {computed.rows.map((it: any) => (
             <div key={it.id} className="flex items-center justify-between border rounded p-3">
               <div>
-                <div className="font-medium">{it.material?.name ?? it.materialId}</div>
+                <div className="font-medium">
+                  {it.material?.code ? `${it.material.code} - ` : ""}{it.material?.name ?? it.materialId}
+                </div>
                 <div className="text-sm text-muted-foreground">
-                  Qtd por produto: {Number(it.quantity ?? 0).toFixed(4)} · Perda item: {Number(it.lossPercent ?? 0).toFixed(2)}%
+                  Qtd/base: {it._qty.toFixed(4)} {it._unit ? it._unit : ""} · Perda item: {it._lossI.toFixed(2)}% · Consumo real: {it._need.toFixed(4)} {it._unit ? it._unit : ""}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Custo atual: {money(it._cost)} · Custo do item: {money(it._lineCost)}
                 </div>
               </div>
               <Button variant="destructive" size="sm" onClick={() => delMut.mutate(it.id)} disabled={delMut.isPending}>

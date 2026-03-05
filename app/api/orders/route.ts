@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
-  const companyId = session.user.companyId as string;
+  const gate = await requireRole(["ADMIN", "VENDEDOR"]);
+  if (!gate.ok) return gate.res;
+  const companyId = gate.session.user!.companyId as string;
+  const userId = gate.session.user!.id as string;
+  const role = String(gate.session.user!.role ?? "");
 
   const orders = await prisma.order.findMany({
-    where: { companyId, deletedAt: null },
+    where: {
+      companyId,
+      deletedAt: null,
+      ...(role === "VENDEDOR" ? { createdById: userId } : {}),
+    } as any,
     orderBy: { createdAt: "desc" },
     include: {
       client: { select: { id: true, name: true } },
@@ -32,11 +37,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
-  const companyId = session.user.companyId as string;
-  const userId = session.user.id as string;
+  const gate = await requireRole(["ADMIN", "VENDEDOR"]);
+  if (!gate.ok) return gate.res;
+  const companyId = gate.session.user!.companyId as string;
+  const userId = gate.session.user!.id as string;
 
   const body = await req.json().catch(() => null);
   const clientId = String(body?.clientId ?? "").trim();
@@ -48,7 +52,7 @@ export async function POST(req: Request) {
     data: {
       id: `ord_${Date.now()}`,
       companyId,
-      userId,
+      createdById: userId,
       clientId,
       notes: notes || null,
       status: "DRAFT" as any,

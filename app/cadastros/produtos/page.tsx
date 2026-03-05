@@ -3,9 +3,11 @@
 import * as React from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ProductPricingDialog } from "@/components/erp/product-pricing-dialog";
 
 type Product = {
   id: string;
@@ -21,7 +23,8 @@ async function fetchProducts(): Promise<Product[]> {
   const res = await fetch("/api/products");
   if (!res.ok) throw new Error("Erro ao carregar produtos");
   const data = await res.json();
-  return data.products ?? [];
+  const list = data?.products ?? data?.rows ?? data;
+  return Array.isArray(list) ? list : [];
 }
 
 async function createProduct(payload: any) {
@@ -110,7 +113,10 @@ export default function ProdutosPage() {
   const autoLoadedRef = React.useRef<Record<string, boolean>>({});
   const markDirty = (id: string) => setPricingDirty((prev) => ({ ...prev, [id]: true }));
   const qc = useQueryClient();
-  const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
+  const { data: productsRaw, isLoading } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
+  const products = React.useMemo(() => {
+    return Array.isArray(productsRaw) ? productsRaw : [];
+  }, [productsRaw]);
 
   // AUTO-LOAD pricing-rule: ao carregar produtos, busca regra salva (sem sobrescrever edição manual)
   React.useEffect(() => {
@@ -165,10 +171,13 @@ export default function ProdutosPage() {
   const [editing, setEditing] = React.useState<Product | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [suggested, setSuggested] = React.useState<Record<string, number>>({});
-  
+
+  const [pricingOpen, setPricingOpen] = React.useState(false);
+  const [pricingProduct, setPricingProduct] = React.useState<Product | null>(null);
+
   const [suggestInfo, setSuggestInfo] = React.useState<Record<string, any>>({});
 const [pricing, setPricing] = React.useState<Record<string, any>>({});
-  const [pricingDirty, setPricingDirty] = React.useState<Record<string, boolean>>({});
+  const [pricingDirty, setPricingDirty] = React.useState<Record<string, boolean>>({});
   React.useEffect(() => { pricingRef.current = pricing; }, [pricing]);
   React.useEffect(() => { pricingDirtyRef.current = pricingDirty; }, [pricingDirty]);
   const pricingRef = React.useRef<Record<string, any>>({});
@@ -380,7 +389,7 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
         <CardHeader><CardTitle>Lista</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {isLoading && <p>Carregando...</p>}
-          {(products ?? []).map((p) => (
+          {products.map((p) => (
             <div key={p.id} className="flex items-center justify-between border rounded p-3">
               <div>
                 <div className="font-medium">
@@ -545,6 +554,18 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
 ) : null}<Button variant="outline" size="sm" onClick={() => recalcMut.mutate(p.id)} disabled={recalcMut.isPending}>
   {recalcMut.isPending ? "Recalculando..." : "Recalcular custo (BOM)"}
 </Button>
+
+<Button
+  variant="secondary"
+  size="sm"
+  onClick={() => {
+    setPricingProduct(p);
+    setPricingOpen(true);
+  }}
+>
+  Precificar
+</Button>
+
 <Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
   <Button variant="destructive" size="sm" onClick={() => delMut.mutate(p.id)} disabled={delMut.isPending}>Remover</Button>
 </div>
@@ -552,6 +573,24 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
           ))}
         </CardContent>
       </Card>
+
+      {pricingProduct ? (
+        <ProductPricingDialog
+          open={pricingOpen}
+          onOpenChange={setPricingOpen}
+          product={pricingProduct as any}
+          pricing={pricing[pricingProduct.id] ?? {}}
+          setPricing={(next) => {
+            setPricing((prev) => ({ ...prev, [pricingProduct.id]: next }));
+            setPricingDirty((prev) => ({ ...prev, [pricingProduct.id]: true }));
+          }}
+          onSuggest={(payload) => suggestPrice(pricingProduct.id, payload)}
+          onApply={async (salePrice) => { await updateProduct(pricingProduct.id, { salePrice }); await qc.invalidateQueries({ queryKey: ["products"] }); }}
+          onSaveRule={async (payload) => { await savePricingRule(pricingProduct.id, payload); }}
+          onLoadRule={async () => loadPricingRule(pricingProduct.id)}
+          onClearRule={async () => { await deletePricingRule(pricingProduct.id); toast.success("Regra removida."); }}
+        />
+      ) : null}
     </div>
   );
 }

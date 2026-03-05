@@ -208,7 +208,7 @@ export default function CompraDetailPage() {
     .filter(Boolean)
     .join(" · ");
 
-  const columns: Column[] = [
+  const columns: Column<any>[] = [
     {
       key: "material",
       header: "Material",

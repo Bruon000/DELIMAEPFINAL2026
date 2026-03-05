@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -13,6 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/erp/status-badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 type Row = {
   id: string;
@@ -21,6 +30,7 @@ type Row = {
   subtotal: string | number;
   discount: string | number;
   total: string | number;
+  discountPercent?: string | number | null;
   createdAt: string;
   validUntil: string | null;
   client?: { id: string; name: string } | null;
@@ -35,6 +45,19 @@ function n(v: any) { return Number(v ?? 0); }
 function money(v: any) {
   const x = n(v);
   return x.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function ptQuoteStatus(s: any) {
+  const x = String(s ?? "").toUpperCase();
+  const map: Record<string, string> = {
+    DRAFT: "Rascunho",
+    SENT: "Enviado",
+    APPROVED: "Aprovado",
+    REJECTED: "Rejeitado",
+    EXPIRED: "Vencido",
+    CANCELED: "Cancelado",
+  };
+  return map[x] ?? (x || "—");
 }
 
 async function fetchQuotesPage(params: {
@@ -68,14 +91,43 @@ async function convertToOrder(quoteId: string) {
   return data as { ok: boolean; orderId: string };
 }
 
+async function setDiscount(quoteId: string, discountPercent: number) {
+  const res = await fetch(`/api/quotes/${quoteId}/set-discount`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ discountPercent }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao aplicar desconto");
+  return data;
+}
+
+async function requestDiscount(quoteId: string, requestedPercent: number, reason: string) {
+  const res = await fetch(`/api/quotes/${quoteId}/discount-requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestedPercent, reason }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao solicitar desconto");
+  return data;
+}
+
 export default function ComercialOrcamentosPage() {
   const qc = useQueryClient();
+  const { data: session } = useSession();
+  const role = String((session as any)?.user?.role ?? "");
 
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState<string>("ALL");
   const [mine, setMine] = React.useState<boolean>(true);
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
+
+  const [discOpen, setDiscOpen] = React.useState(false);
+  const [discQuoteId, setDiscQuoteId] = React.useState<string | null>(null);
+  const [discPct, setDiscPct] = React.useState("5");
+  const [discReason, setDiscReason] = React.useState("");
 
   const queryKey = React.useMemo(
     () => ["quotes", { q, status, mine, from, to }],
@@ -113,6 +165,24 @@ export default function ComercialOrcamentosPage() {
     onError: (e: any) => toast.error(e?.message ?? "Erro ao converter"),
   });
 
+  const discMut = useMutation({
+    mutationFn: async () => {
+      const pct = Number(discPct ?? 0);
+      if (!discQuoteId) throw new Error("quoteId inválido");
+      if (pct <= 5) return setDiscount(discQuoteId, pct);
+      return requestDiscount(discQuoteId, pct, discReason.trim());
+    },
+    onSuccess: async () => {
+      const pct = Number(discPct ?? 0);
+      toast.success(pct <= 5 ? "Desconto aplicado." : "Solicitação enviada para o Admin.");
+      setDiscOpen(false);
+      setDiscQuoteId(null);
+      setDiscReason("");
+      await qc.invalidateQueries({ queryKey: ["quotes"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro"),
+  });
+
   const columns: Column<Row>[] = [
     {
       key: "createdAt",
@@ -134,7 +204,7 @@ export default function ComercialOrcamentosPage() {
       key: "status",
       header: "Status",
       headerClassName: "w-[160px]",
-      cell: (r) => <StatusBadge label={String(r.status ?? "")} />,
+      cell: (r) => <StatusBadge label={ptQuoteStatus(r.status)} />,
     },
     {
       key: "total",
@@ -142,6 +212,13 @@ export default function ComercialOrcamentosPage() {
       headerClassName: "w-[150px]",
       className: "text-right tabular-nums",
       cell: (r) => money(r.total),
+    },
+    {
+      key: "discount",
+      header: "Desc.",
+      headerClassName: "w-[110px]",
+      className: "text-right tabular-nums",
+      cell: (r) => `${Number((r as any).discountPercent ?? 0).toFixed(2)}%`,
     },
     {
       key: "actions",
@@ -155,6 +232,21 @@ export default function ComercialOrcamentosPage() {
             <Link href={`/orcamentos/${r.id}`} onClick={(e) => e.stopPropagation()}>
               <Button size="sm" variant="secondary">Abrir</Button>
             </Link>
+            {role === "VENDEDOR" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDiscQuoteId(r.id);
+                  setDiscPct("5");
+                  setDiscReason("");
+                  setDiscOpen(true);
+                }}
+              >
+                Desconto
+              </Button>
+            ) : null}
             <Button
               size="sm"
               disabled={!canConvert || convertMut.isPending}
@@ -241,6 +333,40 @@ export default function ComercialOrcamentosPage() {
         emptyTitle={listQ.isLoading ? "Carregando..." : "Sem orçamentos"}
         emptyHint={listQ.isLoading ? "Buscando…" : "Ajuste filtros."}
       />
+
+      <Dialog open={discOpen} onOpenChange={setDiscOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Desconto</DialogTitle>
+            <DialogDescription>
+              Até 5% o vendedor aplica direto. Acima disso, vira solicitação para o Admin.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Percentual (%)</Label>
+              <Input type="number" value={discPct} onChange={(e) => setDiscPct(e.target.value)} />
+            </div>
+            {Number(discPct ?? 0) > 5 ? (
+              <div className="space-y-1">
+                <Label>Motivo (obrigatório acima de 5%)</Label>
+                <Input value={discReason} onChange={(e) => setDiscReason(e.target.value)} placeholder="Ex.: concorrência / cliente antigo / volume..." />
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDiscOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => discMut.mutate()}
+              disabled={discMut.isPending || !discQuoteId || (Number(discPct ?? 0) > 5 && discReason.trim().length < 3)}
+            >
+              {discMut.isPending ? "Enviando..." : (Number(discPct ?? 0) <= 5 ? "Aplicar" : "Solicitar")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex justify-center">
         <Button

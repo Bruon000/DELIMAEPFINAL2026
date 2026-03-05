@@ -76,6 +76,8 @@ export async function GET(req: Request) {
   const nextCursor = hasNext ? String(slice[slice.length - 1]?.createdAt?.toISOString?.() ?? "") : null;
 
   const rows = slice.map((r: any) => ({
+    isLocked: r.validUntil ? new Date(r.validUntil) < new Date() : false,
+    daysLeft: r.validUntil ? Math.ceil((new Date(r.validUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null,
     id: r.id,
     number: r.number ?? null,
     status: String(r.status ?? ""),
@@ -109,6 +111,13 @@ export async function POST(req: Request) {
   const notes = String(body?.notes ?? "").trim();
   const validUntilRaw = String(body?.validUntil ?? "").trim();
 
+  // validade padrão: 15 dias
+  const defaultValidUntil = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    return d;
+  })();
+
   if (!clientId) {
     return NextResponse.json({ ok: false, error: "client_required", message: "Informe o cliente." }, { status: 400 });
   }
@@ -120,7 +129,7 @@ export async function POST(req: Request) {
       createdById: userId,
       status: "DRAFT" as any,
       notes: notes || null,
-      validUntil: validUntilRaw ? new Date(validUntilRaw) : null,
+      validUntil: validUntilRaw ? new Date(validUntilRaw) : defaultValidUntil,
       subtotal: 0 as any,
       discount: 0 as any,
       total: 0 as any,

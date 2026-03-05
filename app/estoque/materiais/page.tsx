@@ -14,32 +14,29 @@ async function fetchMaterials() {
   return data as { materials: any[] };
 }
 
-function money(v: any) {
-  const x = Number(v ?? 0);
-  return x.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
 export default function EstoqueMateriaisPage() {
   const q = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
-  const [needle, setNeedle] = React.useState("");
+  const [search, setSearch] = React.useState("");
 
-  const materials = React.useMemo(() => q.data?.materials ?? [], [q.data?.materials]);
+    const materials = React.useMemo(() => {
+    return q.data?.materials ?? [];
+  }, [q.data?.materials]);
 
   const filtered = React.useMemo(() => {
-    const n = needle.trim().toLowerCase();
-    if (!n) return materials;
+    const needle = search.trim().toLowerCase();
+    if (!needle) return materials;
     return materials.filter((m: any) => {
       const name = String(m?.name ?? "").toLowerCase();
       const code = String(m?.code ?? "").toLowerCase();
       const unit = String(m?.unit?.code ?? "").toLowerCase();
-      return name.includes(n) || code.includes(n) || unit.includes(n);
+      return name.includes(needle) || code.includes(needle) || unit.includes(needle);
     });
-  }, [materials, needle]);
+  }, [materials, search]);
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Estoque — Materiais</h1>
+        <h1 className="text-2xl font-bold">Estoque · Materiais (Somente leitura)</h1>
         <Button asChild variant="outline">
           <Link href="/estoque">Voltar</Link>
         </Button>
@@ -49,12 +46,12 @@ export default function EstoqueMateriaisPage() {
         <CardHeader><CardTitle>Buscar</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           <Input
-            placeholder="Buscar material (nome / código / unidade)…"
-            value={needle}
-            onChange={(e) => setNeedle(e.target.value)}
+            placeholder="Buscar por nome / código / unidade…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
           <div className="text-xs text-muted-foreground">
-            {q.isLoading ? "Carregando…" : `Itens: ${filtered.length}`}
+            {q.isLoading ? "Carregando..." : `Itens: ${filtered.length}`}
           </div>
         </CardContent>
       </Card>
@@ -62,11 +59,11 @@ export default function EstoqueMateriaisPage() {
       <Card>
         <CardHeader><CardTitle>Lista</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {q.isLoading ? <p>Carregando…</p> : null}
+          {q.isLoading ? <p>Carregando...</p> : null}
           {q.isError ? <p className="text-red-600">Erro: {(q.error as any)?.message ?? "Falha"}</p> : null}
 
           {!q.isLoading && filtered.length === 0 ? (
-            <p className="text-muted-foreground">Nenhum material encontrado.</p>
+            <p className="text-muted-foreground">Sem materiais.</p>
           ) : null}
 
           {filtered.map((m: any) => (
@@ -74,13 +71,10 @@ export default function EstoqueMateriaisPage() {
               <div>
                 <div className="font-medium">{m.code ? `${m.code} - ` : ""}{m.name}</div>
                 <div className="text-sm text-muted-foreground">
-                  Unidade: {m.unit?.code ?? "—"} · Custo atual: {money(m.currentCost)}
-                  {m.minStock != null ? ` · Mínimo: ${m.minStock}` : ""}
+                  Unidade: {m.unit?.code ?? "—"} · Custo: R$ {Number(m.currentCost ?? 0).toFixed(2)} · Min: {m.minStock ?? "-"}
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                Somente leitura
-              </div>
+              <div className="text-xs text-muted-foreground">Somente leitura</div>
             </div>
           ))}
         </CardContent>
@@ -88,3 +82,4 @@ export default function EstoqueMateriaisPage() {
     </div>
   );
 }
+

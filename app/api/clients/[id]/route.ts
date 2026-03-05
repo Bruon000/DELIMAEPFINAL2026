@@ -56,7 +56,7 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   return NextResponse.json({ client: updated });
 }
 
-export async function DELETE(req: Request, ctx: { params: { id: string } }) {
+export async function DELETE(_req: Request, ctx: { params: { id: string } }) {
   const gate = await requireRole(["ADMIN"]);
   if (!gate.ok) return gate.res;
   const companyId = gate.session.user!.companyId as string;

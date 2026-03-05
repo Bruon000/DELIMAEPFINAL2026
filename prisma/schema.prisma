@@ -42,8 +42,9 @@ model Company {
   apiKeys        ApiKey[]
   purchaseOrders PurchaseOrder[]
 
-  productPricingRules ProductPricingRule[]
-  quotes              Quote[]
+  productPricingRules   ProductPricingRule[]
+  quotes                Quote[]
+  discountApprovalReqs  DiscountApprovalRequest[]
 }
 
 model CompanyTheme {
@@ -143,6 +144,9 @@ model User {
   cashSessions  CashSession[]
   notifications Notification[]
   timeEntries   TimeEntry[]
+
+  discountApprovalReqsRequested DiscountApprovalRequest[] @relation("DiscountRequestedBy")
+  discountApprovalReqsApproved  DiscountApprovalRequest[] @relation("DiscountApprovedBy")
 }
 
 // ========== 2) CADASTROS FUNDAMENTAIS ==========
@@ -441,6 +445,8 @@ model Quote {
   subtotal Decimal @default(0) @db.Decimal(15, 4)
   discount Decimal @default(0) @db.Decimal(15, 4)
   total    Decimal @default(0) @db.Decimal(15, 4)
+  // desconto em % (regra do vendedor: até 5% sem aprovação)
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
 
   notes      String?
   validUntil DateTime?
@@ -449,7 +455,8 @@ model Quote {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  items QuoteItem[]
+  items            QuoteItem[]
+  discountRequests DiscountApprovalRequest[]
 }
 
 model QuoteItem {
@@ -468,6 +475,33 @@ model QuoteItem {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum DiscountApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model DiscountApprovalRequest {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  requestedById String
+  requestedBy   User   @relation("DiscountRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedById  String?
+  approvedBy    User?  @relation("DiscountApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  requestedPercent Decimal  @db.Decimal(5, 2)
+  approvedPercent  Decimal? @db.Decimal(5, 2)
+  reason           String?
+  status           DiscountApprovalStatus @default(PENDING)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 // ========== 5) ESTOQUE ==========

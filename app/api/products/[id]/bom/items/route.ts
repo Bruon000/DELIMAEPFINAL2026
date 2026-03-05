@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 export async function POST(req: Request, ctx: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const r = await requireRole(["ADMIN"]);
+  if (!r.ok) return r.res;
+  const companyId = r.session.user!.companyId as string;
 
   const productId = ctx.params.id;
   const body = await req.json().catch(() => null);

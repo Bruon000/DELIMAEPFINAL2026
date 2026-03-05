@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/rbac";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const gate = await requireRole(["ADMIN", "VENDEDOR"]);
+  if (!gate.ok) return gate.res;
+  const companyId = gate.session.user!.companyId as string;
 
   const clients = await prisma.client.findMany({
     where: { companyId, deletedAt: null },
@@ -34,9 +34,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const companyId = session.user.companyId as string;
+  const gate = await requireRole(["ADMIN", "VENDEDOR"]);
+  if (!gate.ok) return gate.res;
+  const companyId = gate.session.user!.companyId as string;
 
   const body = await req.json().catch(() => null);
   const name = String(body?.name ?? "").trim();

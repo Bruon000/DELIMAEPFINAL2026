@@ -103,7 +103,7 @@ async function postInventoryAdjust(payload: {
   return data;
 }
 
-export default function EstoqueMovimentacoesPage() {
+function EstoqueMovimentacoesContent() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -598,5 +598,13 @@ export default function EstoqueMovimentacoesPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function EstoqueMovimentacoesPage() {
+  return (
+    <React.Suspense fallback={<div className="p-6">Carregando...</div>}>
+      <EstoqueMovimentacoesContent />
+    </React.Suspense>
   );
 }

@@ -39,6 +39,20 @@ function money(v: any) {
   return x.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function ptOrderStatus(s: any) {
+  const x = String(s ?? "").toUpperCase();
+  const map: Record<string, string> = {
+    DRAFT: "Rascunho",
+    OPEN: "Aberto",
+    CONFIRMED: "Confirmado",
+    IN_PRODUCTION: "Em produção",
+    READY: "Pronto",
+    DELIVERED: "Entregue",
+    CANCELED: "Cancelado",
+  };
+  return (map[x] ?? x) || "—";
+}
+
 async function fetchOrdersPage(params: {
   q?: string;
   status?: string;
@@ -114,16 +128,25 @@ export default function ComercialPedidosPage() {
   const confirmMut = useMutation({
     mutationFn: confirmOrder,
     onSuccess: async (d, orderId) => {
-      toast.success("Pedido confirmado! OP e AR gerados.");
+      toast.success("Pedido confirmado! Conta a receber (AR) gerada para o Caixa.");
       await qc.invalidateQueries({ queryKey: ["commercial-orders"] });
       await qc.invalidateQueries({ queryKey });
-      // opcional: abrir pedido ou OP
-      if ((d as any)?.productionOrderId) {
-        toast.message("Abrindo OP…");
-        window.location.href = `/producao/ops/${(d as any).productionOrderId}`;
+
+      const arId = (d as any)?.accountsReceivableId ?? null;
+      if (arId) {
+        const ref = `AR:${arId}`;
+        try {
+          await navigator.clipboard.writeText(ref);
+          toast.success("Ref do Caixa copiada: " + ref);
+        } catch {
+          toast.message("Ref do Caixa: " + ref);
+        }
       } else {
-        window.location.href = `/pedidos/${orderId}`;
+        toast.message("Dica: Abra o pedido e gere/visualize o recebimento no Caixa.");
       }
+
+      // VENDEDOR não deve ir para Produção (RBAC bloqueia /producao)
+      window.location.href = `/pedidos/${orderId}`;
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao confirmar pedido"),
   });
@@ -149,7 +172,9 @@ export default function ComercialPedidosPage() {
       key: "status",
       header: "Status",
       headerClassName: "w-[160px]",
-      cell: (r) => <OrderStatusBadge status={String(r.status ?? "")} />,
+      cell: (r) => (
+        <OrderStatusBadge status={ptOrderStatus(r.status)} />
+      ),
     },
     {
       key: "total",
@@ -284,3 +309,4 @@ export default function ComercialPedidosPage() {
     </div>
   );
 }
+

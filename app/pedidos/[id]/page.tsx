@@ -1,11 +1,26 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+function ptStatus(s: any) {
+  const x = String(s ?? "").toUpperCase();
+  const map: Record<string, string> = {
+    DRAFT: "Rascunho",
+    OPEN: "Aberto",
+    CONFIRMED: "Confirmado",
+    IN_PRODUCTION: "Em produção",
+    READY: "Pronto",
+    DELIVERED: "Entregue",
+    CANCELED: "Cancelado",
+  };
+  return map[x] ?? (x || "—");
+}
 
 async function fetchOrder(id: string) {
   const res = await fetch(`/api/orders/${id}`);
@@ -21,8 +36,12 @@ async function fetchOrderMaterials(id: string) {
 
 async function fetchProducts() {
   const res = await fetch(`/api/products`);
-  if (!res.ok) return { products: [] };
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = res.status === 401 ? "Sessão expirada. Faça login novamente." : (data?.message ?? data?.error ?? "Erro ao carregar produtos");
+    throw new Error(msg);
+  }
+  return data;
 }
 
 async function addItem(orderId: string, payload: any) {
@@ -66,18 +85,48 @@ export default function PedidoEditPage() {
   });
 
   const [productId, setProductId] = React.useState("");
-  const [quantity, setQuantity] = React.useState(1);
-  const [unitPrice, setUnitPrice] = React.useState(0);
+  const [productQ, setProductQ] = React.useState("");
+  const [quantity, setQuantity] = React.useState("1");
+  const [unitPrice, setUnitPrice] = React.useState("");
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  const { data: prodData } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
+  const prodQ = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
+  const prodData = prodQ.data;
+
+  React.useEffect(() => {
+    if (prodQ.isError) setMsg((prodQ.error as any)?.message ?? "Erro ao carregar produtos");
+  }, [prodQ.isError, prodQ.error]);
+
+  // Ao selecionar um produto, usa o preço de venda cadastrado (editável na hora)
+  React.useEffect(() => {
+    if (!productId) return;
+    const p = (prodData?.products ?? []).find((x: any) => x.id === productId);
+    if (!p) return;
+    const sp = Number(p.salePrice ?? 0);
+    if (Number.isFinite(sp) && sp > 0) setUnitPrice(String(sp));
+  }, [productId, prodData?.products]);
+
+  const products = React.useMemo(() => {
+    return prodData?.products ?? [];
+  }, [prodData?.products]);
+
+  const filteredProducts = React.useMemo(() => {
+    const needle = productQ.trim().toLowerCase();
+    if (!needle) return products;
+    return products.filter((p: any) => {
+      const name = String(p?.name ?? "").toLowerCase();
+      const code = String(p?.code ?? "").toLowerCase();
+      return name.includes(needle) || code.includes(needle);
+    });
+  }, [products, productQ]);
 
   const addMut = useMutation({
     mutationFn: (p: any) => addItem(id, p),
     onSuccess: async () => {
       setProductId("");
-      setQuantity(1);
-      setUnitPrice(0);
+      setProductQ("");
+      setQuantity("1");
+      setUnitPrice("");
       await qc.invalidateQueries({ queryKey: ["order", id] });
       await qc.invalidateQueries({ queryKey: ["order-materials", id] });
     },
@@ -119,8 +168,53 @@ export default function PedidoEditPage() {
         <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           <div><b>Cliente:</b> {order.client?.name ?? "—"}</div>
-          <div><b>Status:</b> {order.status}</div>
+          <div><b>Status:</b> {ptStatus(order.status)}</div>
           <div><b>Total:</b> R$ {Number(total).toFixed(2)}</div>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => window.open(`/api/print/orders/${id}`, "_blank")}
+            >
+              Abrir PDF
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const num = order?.number ? String(order.number) : String(id);
+                const cli = order?.client?.name ? String(order.client.name) : "Cliente";
+                const pdfUrl = `${window.location.origin}/api/print/orders/${id}`;
+                const txt =
+                  `Olá! Segue o *pedido ${num}*.\n` +
+                  `Cliente: ${cli}\n` +
+                  `Total: R$ ${Number(total).toFixed(2)}\n\n` +
+                  `PDF: ${pdfUrl}`;
+                const url = `https://wa.me/?text=${encodeURIComponent(txt)}`;
+                window.open(url, "_blank");
+              }}
+            >
+              WhatsApp
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                const num = order?.number ? String(order.number) : String(id);
+                const cli = order?.client?.name ? String(order.client.name) : "Cliente";
+                const pdfUrl = `${window.location.origin}/api/print/orders/${id}`;
+                const txt =
+                  `Pedido ${num}\nCliente: ${cli}\nTotal: R$ ${Number(total).toFixed(2)}\nPDF: ${pdfUrl}`;
+                await navigator.clipboard.writeText(txt);
+                toast.success("Mensagem copiada!");
+              }}
+            >
+              Copiar mensagem
+            </Button>
+          </div>
 
           <div className="pt-2 flex gap-2">
             <Button disabled={!canConfirm || confMut.isPending} onClick={() => confMut.mutate()}>
@@ -160,18 +254,78 @@ export default function PedidoEditPage() {
 
       <Card>
         <CardHeader><CardTitle>Adicionar item</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <select className="border rounded p-2" value={productId} onChange={(e) => setProductId(e.target.value)}>
-            <option value="">Produto…</option>
-            {(prodData?.products ?? []).map((p: any) => (
-              <option key={p.id} value={p.id}>{p.code ? `${p.code} - ` : ""}{p.name}</option>
-            ))}
-          </select>
-          <Input type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
-          <Input type="number" value={unitPrice} onChange={(e) => setUnitPrice(Number(e.target.value))} />
-          <Button disabled={!productId || quantity <= 0 || addMut.isPending} onClick={() => addMut.mutate({ productId, quantity, unitPrice })}>
-            {addMut.isPending ? "Adicionando..." : "Adicionar"}
-          </Button>
+        <CardContent className="space-y-3">
+          <Input
+            placeholder="Buscar produto (nome / código)…"
+            value={productQ}
+            onChange={(e) => setProductQ(e.target.value)}
+          />
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <select
+              className="border rounded p-2"
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+            >
+              <option value="">
+                {prodQ.isLoading ? "Carregando produtos..." : "Produto…"}
+              </option>
+              {filteredProducts.length === 0 && !prodQ.isLoading ? (
+                <option value="" disabled>Nenhum produto encontrado</option>
+              ) : null}
+              {filteredProducts.map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.code ? `${p.code} - ` : ""}{p.name}
+                  {Number(p.salePrice ?? 0) > 0 ? ` · R$ ${Number(p.salePrice).toFixed(2)}` : ""}
+                </option>
+              ))}
+            </select>
+
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder="Qtd"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+            />
+
+            <div className="space-y-1">
+              <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="Preço unit."
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!productId}
+                onClick={() => {
+                  const p = (products ?? []).find((x: any) => x.id === productId);
+                  const sp = Number(p?.salePrice ?? 0);
+                  if (!Number.isFinite(sp) || sp <= 0) return toast.error("Produto sem preço de venda cadastrado.");
+                  setUnitPrice(String(sp));
+                }}
+              >
+                Usar preço do produto
+              </Button>
+            </div>
+
+            <Button
+              disabled={!productId || addMut.isPending}
+              onClick={() => {
+                const qty = Number(String(quantity ?? "").replace(",", "."));
+                const up = Number(String(unitPrice ?? "").replace(",", "."));
+                if (!Number.isFinite(qty) || qty <= 0) return toast.error("Informe uma quantidade válida.");
+                // unitPrice pode ser 0 → API vai tentar puxar do produto; se produto não tiver, ela devolve erro
+                addMut.mutate({ productId, quantity: qty, unitPrice: Number.isFinite(up) ? up : 0 });
+              }}
+            >
+              {addMut.isPending ? "Adicionando..." : "Adicionar"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
