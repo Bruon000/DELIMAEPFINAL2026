@@ -64,3 +64,7 @@ tmp_route_before.txt
 # scans/diagnosticos
 _scan/
 
+
+# catálogos fiscais grandes (NCM/CEST)
+prisma/data/
+

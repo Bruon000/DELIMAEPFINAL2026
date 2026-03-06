@@ -141,6 +141,51 @@ async function main() {
     } as any);
   }
 
+  const cests = [
+    { code: "1005300", description: "Telas metálicas" },
+    { code: "2804400", description: "Ferragens e artigos de metal comuns" },
+  ];
+
+  for (const x of cests) {
+    await prisma.fiscalCest.upsert({
+      where: { code: x.code } as any,
+      update: { description: x.description } as any,
+      create: { code: x.code, description: x.description } as any,
+    } as any);
+  }
+
+  // ==== PERFIS FISCAIS (VÍNCULO DO PRODUTO) ====
+  const taxProfiles = [
+    {
+      name: "ICMS Tributado - PIS/COFINS Isento",
+      description: "Venda padrão com ICMS tributado; PIS/COFINS sem destaque/isento (ajustar no emissor).",
+    },
+    {
+      name: "ICMS Tributado - PIS/COFINS Tributado",
+      description: "Venda padrão com ICMS + PIS/COFINS tributados (ajustar regras no emissor).",
+    },
+    {
+      name: "Simples Nacional (CSOSN 102)",
+      description: "SN sem permissão de crédito (CSOSN 102).",
+    },
+    {
+      name: "Simples Nacional (CSOSN 101)",
+      description: "SN com permissão de crédito (CSOSN 101).",
+    },
+    {
+      name: "ICMS ST (Substituição Tributária)",
+      description: "Operação com ST (depende do produto/estado; ajuste no emissor).",
+    },
+  ];
+
+  for (const p of taxProfiles) {
+    await prisma.fiscalTaxProfile.upsert({
+      where: { name: p.name } as any,
+      update: { description: p.description } as any,
+      create: { name: p.name, description: p.description } as any,
+    } as any);
+  }
+
   const defaultCfop = await prisma.fiscalCfop.findUnique({ where: { code: "5101" } as any, select: { id: true } as any } as any);
 
   // FiscalConfig (1 por empresa)

@@ -862,6 +862,9 @@ model ProductFiscal {
   ncmId     String?
   ncm       FiscalNcm? @relation(fields: [ncmId], references: [id], onDelete: SetNull)
 
+  cestId    String?
+  cest      FiscalCest? @relation(fields: [cestId], references: [id], onDelete: SetNull)
+
   cfopId    String?
   cfop      FiscalCfop? @relation(fields: [cfopId], references: [id], onDelete: SetNull)
 
@@ -871,13 +874,42 @@ model ProductFiscal {
   csosnId   String?
   csosn     FiscalCsosn? @relation(fields: [csosnId], references: [id], onDelete: SetNull)
 
+  taxProfileId String?
+  taxProfile   FiscalTaxProfile? @relation(fields: [taxProfileId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ncmId])
+  @@index([cestId])
   @@index([cfopId])
   @@index([cstId])
   @@index([csosnId])
+  @@index([taxProfileId])
+}
+
+model FiscalTaxProfile {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  productFiscal ProductFiscal[]
+
+  @@unique([name])
+}
+
+model FiscalCest {
+  id          String   @id @default(cuid())
+  code        String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  productFiscal ProductFiscal[]
+
+  @@unique([code])
 }
 
 model FiscalInvoice {

@@ -8,6 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProductPricingDialog } from "@/components/erp/product-pricing-dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Product = {
   id: string;
@@ -99,6 +108,46 @@ async function deletePricingRule(id: string) {
   return data;
 }
 
+type FiscalOption = { id: string; code: string; description: string; label: string };
+
+async function fetchProductFiscal(productId: string) {
+  const res = await fetch(`/api/products/${productId}/fiscal`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao carregar fiscal do produto");
+  return data as { product: { id: string; name: string; code?: string | null }; fiscal: unknown | null };
+}
+
+async function saveProductFiscal(productId: string, payload: { origin: number; ncmId: string | null; cestId: string | null; cfopId: string | null; cstId: string | null; csosnId: string | null; taxProfileId: string | null }) {
+  const res = await fetch(`/api/products/${productId}/fiscal`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao salvar fiscal do produto");
+  return data as { ok: boolean; fiscal: unknown };
+}
+
+async function searchFiscal(kind: "ncm" | "cfop" | "cst" | "csosn", q: string) {
+  const sp = new URLSearchParams();
+  sp.set("q", q);
+  sp.set("take", "8");
+  const res = await fetch(`/api/fiscal/${kind}?${sp.toString()}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao buscar");
+  return (data?.results ?? []) as FiscalOption[];
+}
+
+async function searchFiscalAny(path: string, q: string) {
+  const sp = new URLSearchParams();
+  sp.set("q", q);
+  sp.set("take", "8");
+  const res = await fetch(`${path}?${sp.toString()}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao buscar");
+  return (data?.results ?? []) as FiscalOption[];
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -182,6 +231,116 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
   React.useEffect(() => { pricingDirtyRef.current = pricingDirty; }, [pricingDirty]);
   const pricingRef = React.useRef<Record<string, any>>({});
   const pricingDirtyRef = React.useRef<Record<string, boolean>>({});
+
+  // FISCAL DO PRODUTO (Dialog)
+  const [fiscalOpen, setFiscalOpen] = React.useState(false);
+  const [fiscalProduct, setFiscalProduct] = React.useState<Product | null>(null);
+  const [origin, setOrigin] = React.useState<number>(0);
+  const [ncm, setNcm] = React.useState<FiscalOption | null>(null);
+  const [cest, setCest] = React.useState<FiscalOption | null>(null);
+  const [cfop, setCfop] = React.useState<FiscalOption | null>(null);
+  const [cst, setCst] = React.useState<FiscalOption | null>(null);
+  const [csosn, setCsosn] = React.useState<FiscalOption | null>(null);
+  const [taxProfile, setTaxProfile] = React.useState<FiscalOption | null>(null);
+  const [qNcm, setQNcm] = React.useState("");
+  const [qCest, setQCest] = React.useState("");
+  const [qCfop, setQCfop] = React.useState("");
+  const [qCst, setQCst] = React.useState("");
+  const [qCsosn, setQCsosn] = React.useState("");
+  const [qTaxProfile, setQTaxProfile] = React.useState("");
+
+  const fiscalQ = useQuery({
+    queryKey: ["product-fiscal", fiscalProduct?.id],
+    queryFn: () => fetchProductFiscal(String(fiscalProduct?.id ?? "")),
+    enabled: Boolean(fiscalOpen && fiscalProduct?.id),
+  });
+
+  React.useEffect(() => {
+    if (!fiscalOpen) return;
+    if (!fiscalQ.data) return;
+    const f = fiscalQ.data?.fiscal as {
+      origin?: number;
+      ncm?: { id: string; code: string; description: string };
+      cest?: { id: string; code: string; description: string };
+      cfop?: { id: string; code: string; description: string };
+      cst?: { id: string; code: string; description: string };
+      csosn?: { id: string; code: string; description: string };
+      taxProfile?: { id: string; name: string; description: string | null };
+    } | null;
+    setOrigin(Number(f?.origin ?? 0));
+    setNcm(f?.ncm ? { id: f.ncm.id, code: f.ncm.code, description: f.ncm.description, label: `${f.ncm.code} - ${f.ncm.description}` } : null);
+    setCest(f?.cest ? { id: f.cest.id, code: f.cest.code, description: f.cest.description, label: `${f.cest.code} - ${f.cest.description}` } : null);
+    setCfop(f?.cfop ? { id: f.cfop.id, code: f.cfop.code, description: f.cfop.description, label: `${f.cfop.code} - ${f.cfop.description}` } : null);
+    setCst(f?.cst ? { id: f.cst.id, code: f.cst.code, description: f.cst.description, label: `${f.cst.code} - ${f.cst.description}` } : null);
+    setCsosn(f?.csosn ? { id: f.csosn.id, code: f.csosn.code, description: f.csosn.description, label: `${f.csosn.code} - ${f.csosn.description}` } : null);
+    setTaxProfile(
+      f?.taxProfile
+        ? { id: f.taxProfile.id, code: f.taxProfile.name, description: f.taxProfile.description ?? "", label: f.taxProfile.description ? `${f.taxProfile.name} - ${f.taxProfile.description}` : f.taxProfile.name }
+        : null
+    );
+    setQNcm(f?.ncm ? `${f.ncm.code} - ${f.ncm.description}` : "");
+    setQCest(f?.cest ? `${f.cest.code} - ${f.cest.description}` : "");
+    setQCfop(f?.cfop ? `${f.cfop.code}` : "");
+    setQCst(f?.cst ? `${f.cst.code}` : "");
+    setQCsosn(f?.csosn ? `${f.csosn.code}` : "");
+    setQTaxProfile(f?.taxProfile ? (f.taxProfile.description ? `${f.taxProfile.name} - ${f.taxProfile.description}` : `${f.taxProfile.name}`) : "");
+  }, [fiscalOpen, fiscalQ.data]);
+
+  const ncmQ = useQuery({
+    queryKey: ["fiscal-ncm", qNcm],
+    queryFn: () => searchFiscal("ncm", qNcm.trim()),
+    enabled: fiscalOpen && qNcm.trim().length >= 2,
+  });
+  const cfopQ = useQuery({
+    queryKey: ["fiscal-cfop", qCfop],
+    queryFn: () => searchFiscal("cfop", qCfop.trim()),
+    enabled: fiscalOpen && qCfop.trim().length >= 2,
+  });
+  const cstQ = useQuery({
+    queryKey: ["fiscal-cst", qCst],
+    queryFn: () => searchFiscal("cst", qCst.trim()),
+    enabled: fiscalOpen && qCst.trim().length >= 1,
+  });
+  const csosnQ = useQuery({
+    queryKey: ["fiscal-csosn", qCsosn],
+    queryFn: () => searchFiscal("csosn", qCsosn.trim()),
+    enabled: fiscalOpen && qCsosn.trim().length >= 1,
+  });
+
+  const cestQ = useQuery({
+    queryKey: ["fiscal-cest", qCest],
+    queryFn: () => searchFiscalAny("/api/fiscal/cest", qCest.trim()),
+    enabled: fiscalOpen && qCest.trim().length >= 2,
+  });
+
+  const taxProfileQ = useQuery({
+    queryKey: ["fiscal-tax-profile", qTaxProfile],
+    queryFn: () => searchFiscalAny("/api/fiscal/tax-profiles", qTaxProfile.trim()),
+    enabled: fiscalOpen && qTaxProfile.trim().length >= 2,
+  });
+
+  const saveFiscalMut = useMutation({
+    mutationFn: async () => {
+      if (!fiscalProduct?.id) throw new Error("produto_invalido");
+      return saveProductFiscal(fiscalProduct.id, {
+        origin,
+        ncmId: ncm?.id ?? null,
+        cestId: cest?.id ?? null,
+        cfopId: cfop?.id ?? null,
+        cstId: cst?.id ?? null,
+        csosnId: csosn?.id ?? null,
+        taxProfileId: taxProfile?.id ?? null,
+      });
+    },
+    onSuccess: async () => {
+      toast.success("Fiscal do produto salvo.");
+      await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["product-fiscal", fiscalProduct?.id] });
+      setFiscalOpen(false);
+    },
+    onError: (e: Error) => toast.error(e?.message ?? "Erro ao salvar fiscal"),
+  });
+
   const createMut = useMutation({
     mutationFn: createProduct,
     onSuccess: async () => {
@@ -403,6 +562,17 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
   <Button asChild variant="outline" size="sm">
     <Link href={`/cadastros/produtos/${p.id}/bom`}>BOM</Link>
   </Button>
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={() => {
+      setFiscalProduct(p);
+      setFiscalOpen(true);
+    }}
+    title="Cadastro fiscal do produto (NCM/CFOP/CST/CSOSN)"
+  >
+    Fiscal
+  </Button>
   <select
   className="border rounded p-2 text-sm"
   title="MARGIN = margem % sobre o preço final | MARKUP = % sobre o custo"
@@ -591,6 +761,217 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
           onClearRule={async () => { await deletePricingRule(pricingProduct.id); toast.success("Regra removida."); }}
         />
       ) : null}
+
+      <Dialog open={fiscalOpen} onOpenChange={setFiscalOpen}>
+        <DialogContent className="max-w-[760px]">
+          <DialogHeader>
+            <DialogTitle>Fiscal do Produto</DialogTitle>
+            <DialogDescription>
+              Configure NCM/CFOP/CST/CSOSN para o emissor fiscal no futuro. (ADMIN)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="text-sm">
+              <div className="font-medium">{fiscalProduct?.name ?? "Produto"}</div>
+              <div className="text-xs text-muted-foreground">ID: {fiscalProduct?.id ?? "—"}</div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1 md:col-span-2">
+                <Label>Informe o vínculo deste produto</Label>
+                <Input value={qTaxProfile} onChange={(e) => setQTaxProfile(e.target.value)} placeholder="Digite o nome do vínculo..." />
+                {taxProfile ? <div className="text-xs text-muted-foreground">Selecionado: {taxProfile.label}</div> : null}
+                {qTaxProfile.trim().length >= 2 && taxProfileQ.data?.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem resultados.</div>
+                ) : null}
+                {taxProfileQ.data?.length ? (
+                  <div className="max-h-40 overflow-auto border rounded">
+                    {taxProfileQ.data.map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                        onClick={() => {
+                          setTaxProfile(opt);
+                          setQTaxProfile(opt.label);
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <Label>Origem</Label>
+                <select
+                  className="border rounded p-2 w-full"
+                  value={String(origin)}
+                  onChange={(e) => setOrigin(Number(e.target.value))}
+                >
+                  <option value="0">0 - Nacional</option>
+                  <option value="1">1 - Estrangeira (Importação direta)</option>
+                  <option value="2">2 - Estrangeira (Adquirida no mercado interno)</option>
+                  <option value="3">3 - Nacional (conteúdo importação &gt; 40%)</option>
+                  <option value="4">4 - Nacional (produção básica)</option>
+                  <option value="5">5 - Nacional (conteúdo importação ≤ 40%)</option>
+                  <option value="6">6 - Estrangeira (Importação sem similar nacional)</option>
+                  <option value="7">7 - Estrangeira (Adquirida internamente sem similar)</option>
+                  <option value="8">8 - Nacional (conteúdo importação &gt; 70%)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>NCM</Label>
+                <Input value={qNcm} onChange={(e) => setQNcm(e.target.value)} placeholder="Digite código ou descrição..." />
+                {ncm ? <div className="text-xs text-muted-foreground">Selecionado: {ncm.label}</div> : null}
+                {qNcm.trim().length >= 2 && ncmQ.data?.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem resultados.</div>
+                ) : null}
+                {ncmQ.data?.length ? (
+                  <div className="max-h-40 overflow-auto border rounded">
+                    {ncmQ.data.map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                        onClick={() => {
+                          setNcm(opt);
+                          setQNcm(opt.label);
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <Label>CEST</Label>
+                <Input value={qCest} onChange={(e) => setQCest(e.target.value)} placeholder="Digite CEST (código ou descrição)..." />
+                {cest ? <div className="text-xs text-muted-foreground">Selecionado: {cest.label}</div> : null}
+                {qCest.trim().length >= 2 && cestQ.data?.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem resultados.</div>
+                ) : null}
+                {cestQ.data?.length ? (
+                  <div className="max-h-40 overflow-auto border rounded">
+                    {cestQ.data.map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                        onClick={() => {
+                          setCest(opt);
+                          setQCest(opt.label);
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>CFOP</Label>
+                <Input value={qCfop} onChange={(e) => setQCfop(e.target.value)} placeholder="Digite CFOP (ex.: 5101)..." />
+                {cfop ? <div className="text-xs text-muted-foreground">Selecionado: {cfop.label}</div> : null}
+                {qCfop.trim().length >= 2 && cfopQ.data?.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem resultados.</div>
+                ) : null}
+                {cfopQ.data?.length ? (
+                  <div className="max-h-40 overflow-auto border rounded">
+                    {cfopQ.data.map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                        onClick={() => {
+                          setCfop(opt);
+                          setQCfop(opt.label);
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <div />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>CST (regime normal)</Label>
+                <Input value={qCst} onChange={(e) => setQCst(e.target.value)} placeholder='Ex.: "00", "20", "40"...' />
+                {cst ? <div className="text-xs text-muted-foreground">Selecionado: {cst.label}</div> : null}
+                {cstQ.data?.length ? (
+                  <div className="max-h-40 overflow-auto border rounded">
+                    {cstQ.data.map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                        onClick={() => {
+                          setCst(opt);
+                          setCsosn(null);
+                          setQCsosn("");
+                          setQCst(opt.code);
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="text-xs text-muted-foreground">Se selecionar CST, CSOSN será limpo.</div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>CSOSN (Simples Nacional)</Label>
+                <Input value={qCsosn} onChange={(e) => setQCsosn(e.target.value)} placeholder='Ex.: "101", "102", "500"...' />
+                {csosn ? <div className="text-xs text-muted-foreground">Selecionado: {csosn.label}</div> : null}
+                {csosnQ.data?.length ? (
+                  <div className="max-h-40 overflow-auto border rounded">
+                    {csosnQ.data.map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                        onClick={() => {
+                          setCsosn(opt);
+                          setCst(null);
+                          setQCst("");
+                          setQCsosn(opt.code);
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="text-xs text-muted-foreground">Se selecionar CSOSN, CST será limpo.</div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFiscalOpen(false)}>
+              Voltar
+            </Button>
+            <Button onClick={() => saveFiscalMut.mutate()} disabled={saveFiscalMut.isPending}>
+              {saveFiscalMut.isPending ? "Salvando..." : "Salvar fiscal"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
