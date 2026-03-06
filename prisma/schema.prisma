@@ -127,6 +127,32 @@ enum Role {
   CONTADOR
 }
 
+// Pagamento (intenção do vendedor -> caixa ajusta se necessário)
+enum PaymentMethod {
+  CASH
+  PIX
+  CARD
+  TRANSFER
+  OTHER
+}
+
+enum CardBrand {
+  VISA
+  MASTERCARD
+  ELO
+  AMEX
+  HIPERCARD
+  OTHER
+}
+
+enum FiscalDocType {
+  NFE
+  NFCE
+  CTE
+  MDFE
+  NFSE
+}
+
 model User {
   id           String    @id @default(cuid())
   companyId    String
@@ -383,6 +409,13 @@ model Order {
   notes          String?
   technicalNotes String? // medidas, detalhes
   confirmedAt    DateTime?
+  // ===== Intenção do vendedor (CAIXA pode ajustar) =====
+  sentToCashierAt  DateTime?
+  requestedDocType FiscalDocType? // NFCE/NFE etc.
+  paymentMethod    PaymentMethod?
+  cardBrand        CardBrand?
+  installments     Int?
+  paymentNote      String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   deletedAt      DateTime?

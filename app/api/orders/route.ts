@@ -43,10 +43,28 @@ export async function POST(req: Request) {
   const userId = gate.session.user!.id as string;
 
   const body = await req.json().catch(() => null);
-  const clientId = String(body?.clientId ?? "").trim();
+  const clientIdRaw = String(body?.clientId ?? "").trim();
+  const walkIn = Boolean(body?.walkIn ?? false);
   const notes = String(body?.notes ?? "").trim();
 
+  let clientId = clientIdRaw;
+  if (!clientId && walkIn) {
+    const walkin = await prisma.client.findFirst({
+      where: { companyId, document: "WALKIN", deletedAt: null } as any,
+      select: { id: true } as any,
+    } as any);
+    if (!walkin) return NextResponse.json({ error: "walkin_not_found" }, { status: 404 });
+    clientId = String(walkin.id);
+  }
+
   if (!clientId) return NextResponse.json({ error: "client_required" }, { status: 400 });
+
+  const requestedDocType = body?.requestedDocType ? String(body.requestedDocType).toUpperCase() : null;
+  const paymentMethod = body?.paymentMethod ? String(body.paymentMethod).toUpperCase() : null;
+  const cardBrand = body?.cardBrand ? String(body.cardBrand).toUpperCase() : null;
+  const installments = body?.installments != null ? Number(body.installments) : null;
+  const sentToCashier = Boolean(body?.sentToCashier ?? false);
+  const paymentNote = body?.paymentNote ? String(body.paymentNote).trim() : null;
 
   const order = await prisma.order.create({
     data: {
@@ -56,6 +74,12 @@ export async function POST(req: Request) {
       clientId,
       notes: notes || null,
       status: "DRAFT" as any,
+      sentToCashierAt: sentToCashier ? new Date() : null,
+      requestedDocType: requestedDocType || null,
+      paymentMethod: paymentMethod || null,
+      cardBrand: cardBrand || null,
+      installments: Number.isFinite(installments) ? installments : null,
+      paymentNote: paymentNote || null,
     } as any,
     select: { id: true },
   });

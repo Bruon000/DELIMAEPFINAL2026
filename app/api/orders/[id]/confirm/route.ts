@@ -32,6 +32,53 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   } as any);
 
   if (!order) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
+
+  // ===== REGRA PDV: só confirma após pagamento (AR PAID) =====
+  const paidAr = await prisma.accountsReceivable.findFirst({
+    where: { companyId, orderId, status: "PAID" as any } as any,
+    orderBy: { paidAt: "desc" } as any,
+    select: { id: true, paidAt: true } as any,
+  } as any);
+
+  if (!paidAr) {
+    return NextResponse.json(
+      {
+        error: "payment_required_before_confirm",
+        message: "Pagamento não encontrado. Receba no PDV antes de confirmar.",
+      },
+      { status: 409 },
+    );
+  }
+
+  // ===== REGRA: se pedido exige NFE, só confirma após NFE autorizada =====
+  const requestedDocType = String((order as any)?.requestedDocType ?? "").toUpperCase();
+  if (requestedDocType === "NFE") {
+    const inv = await prisma.fiscalInvoice.findFirst({
+      where: { companyId, orderId, docType: "NFE" as any } as any,
+      select: { id: true, status: true } as any,
+      orderBy: [{ createdAt: "desc" }] as any,
+    } as any);
+
+    if (!inv) {
+      return NextResponse.json(
+        { error: "fiscal_required_before_confirm", message: "Pedido com NFE: emita a NFE antes de confirmar." },
+        { status: 409 },
+      );
+    }
+
+    if (String(inv.status) !== "AUTHORIZED") {
+      return NextResponse.json(
+        {
+          error: "fiscal_not_authorized",
+          message: `NFE ainda não autorizada (status: ${inv.status}). Emita/aguarde autorização antes de confirmar.`,
+          invoiceId: inv.id,
+          invoiceStatus: inv.status,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const items = (order as any).items;
   if (!items?.length) return NextResponse.json({ error: "order_has_no_items" }, { status: 400 });
 
@@ -127,21 +174,29 @@ const need = base * (1 + lossBom) * (1 + lossItem);
       select: { id: true },
     } as any);
 
-    // 4) criar AR (AccountsReceivable) mínimo 1 parcela
-    const ar = await tx.accountsReceivable.create({
-      data: {
-        companyId,
-        orderId,
-        amount: total,
-        status: "PENDING" as any,
-        dueDate: new Date(),
-      } as any,
-      select: { id: true },
+    // 4) criar AR se ainda não existir (PDV pode ter criado antes do pagamento)
+    const existingAr = await tx.accountsReceivable.findFirst({
+      where: { companyId, orderId } as any,
+      orderBy: { createdAt: "desc" } as any,
+      select: { id: true } as any,
     } as any);
+
+    const ar = existingAr
+      ? existingAr
+      : await tx.accountsReceivable.create({
+          data: {
+            companyId,
+            orderId,
+            amount: total,
+            status: "PENDING" as any,
+            dueDate: new Date(),
+          } as any,
+          select: { id: true } as any,
+        } as any);
 
     return { productionOrderId: po.id, accountsReceivableId: ar.id, total };
   });
 
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, message: "confirmed_and_op_created", ...result });
 }
 

@@ -45,6 +45,28 @@ async function main() {
     }
   }
 
+  // ==== CLIENTE BALCÃO (WALKIN) ====
+  // Usado no PDV quando o cliente não quer cadastro -> padrão NFCE.
+  const walkinDoc = "WALKIN";
+  const walkinName = "CONSUMIDOR FINAL (BALCÃO)";
+
+  const existingWalkin = await prisma.client.findFirst({
+    where: { companyId: company.id, document: walkinDoc, deletedAt: null } as any,
+    select: { id: true } as any,
+  } as any);
+
+  if (!existingWalkin) {
+    await prisma.client.create({
+      data: {
+        id: `cli_walkin_${company.id}`,
+        companyId: company.id,
+        name: walkinName,
+        document: walkinDoc,
+        isActive: true,
+      } as any,
+    } as any);
+  }
+
   const passwordHash = await bcrypt.hash("admin123", 10);
 
   // Seu schema pode ou não ter email como unique — então fazemos findFirst + upsert por id fixo

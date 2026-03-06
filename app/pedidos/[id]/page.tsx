@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 
 function ptStatus(s: any) {
   const x = String(s ?? "").toUpperCase();
@@ -63,10 +64,14 @@ async function removeItem(itemId: string) {
   return res.json();
 }
 
-async function confirmOrder(orderId: string) {
-  const res = await fetch(`/api/orders/${orderId}/confirm`, { method: "POST" });
+async function patchOrder(orderId: string, payload: any) {
+  const res = await fetch(`/api/orders/${orderId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Erro ao confirmar");
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao salvar");
   return data;
 }
 
@@ -77,6 +82,18 @@ export default function PedidoEditPage() {
 
   const { data, isLoading } = useQuery({ queryKey: ["order", id], queryFn: () => fetchOrder(id) });
   const order = data?.order;
+
+  React.useEffect(() => {
+    if (!order) return;
+    const rd = String(order?.requestedDocType ?? "").toUpperCase();
+    const pm = String(order?.paymentMethod ?? "").toUpperCase();
+    const cb = String(order?.cardBrand ?? "").toUpperCase();
+    if (rd === "NFE" || rd === "NFCE") setRequestedDocType(rd as any);
+    if (pm === "CASH" || pm === "PIX" || pm === "CARD") setPaymentMethod(pm as any);
+    if (cb) setCardBrand(cb as any);
+    if (order?.installments != null) setInstallments(String(order.installments));
+    if (order?.paymentNote != null) setPaymentNote(String(order.paymentNote ?? ""));
+  }, [order]);
 
   const { data: matData } = useQuery({
     queryKey: ["order-materials", id],
@@ -89,6 +106,13 @@ export default function PedidoEditPage() {
   const [quantity, setQuantity] = React.useState("1");
   const [unitPrice, setUnitPrice] = React.useState("");
   const [msg, setMsg] = React.useState<string | null>(null);
+
+  // ===== intenção do vendedor para o PDV =====
+  const [requestedDocType, setRequestedDocType] = React.useState<"NFCE" | "NFE">("NFCE");
+  const [paymentMethod, setPaymentMethod] = React.useState<"CASH" | "PIX" | "CARD">("PIX");
+  const [cardBrand, setCardBrand] = React.useState<"VISA" | "MASTERCARD" | "ELO" | "AMEX" | "HIPERCARD">("VISA");
+  const [installments, setInstallments] = React.useState("1");
+  const [paymentNote, setPaymentNote] = React.useState("");
 
   const prodQ = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
   const prodData = prodQ.data;
@@ -142,23 +166,28 @@ export default function PedidoEditPage() {
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const confMut = useMutation({
-    mutationFn: () => confirmOrder(id),
+  const saveIntentMut = useMutation({
+    mutationFn: (payload: any) => patchOrder(id, payload),
     onSuccess: async () => {
-      setMsg("Pedido confirmado! OP e AR gerados.");
+      toast.success("Intenção salva.");
       await qc.invalidateQueries({ queryKey: ["order", id] });
-      await qc.invalidateQueries({ queryKey: ["order-materials", id] });
     },
-    onError: (e: any) => setMsg(e?.message ?? "Erro"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao salvar"),
+  });
+
+  const sendToCashierMut = useMutation({
+    mutationFn: (payload: any) => patchOrder(id, { ...payload, sendToCashier: true }),
+    onSuccess: async () => {
+      toast.success("Enviado ao caixa (DRAFT).");
+      await qc.invalidateQueries({ queryKey: ["order", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao enviar"),
   });
 
   if (isLoading) return <div className="p-6">Carregando...</div>;
   if (!order) return <div className="p-6">Pedido não encontrado.</div>;
 
   const total = (order.items ?? []).reduce((s: number, it: any) => s + Number(it.total ?? 0), 0);
-
-  const shortages = matData?.shortages ?? [];
-  const canConfirm = String(order.status) === "DRAFT" && shortages.length === 0;
 
   return (
     <div className="p-6 space-y-4">
@@ -216,13 +245,122 @@ export default function PedidoEditPage() {
             </Button>
           </div>
 
-          <div className="pt-2 flex gap-2">
-            <Button disabled={!canConfirm || confMut.isPending} onClick={() => confMut.mutate()}>
-              {confMut.isPending ? "Confirmando..." : "Confirmar pedido"}
-            </Button>
-            {!canConfirm && String(order.status) === "DRAFT" && shortages.length > 0 && (
-              <span className="text-sm text-red-600 self-center">Falta material no estoque para confirmar.</span>
-            )}
+          <div className="pt-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Enviar ao Caixa</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Documento fiscal desejado</Label>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      value={requestedDocType}
+                      onChange={(e) => setRequestedDocType(e.target.value as any)}
+                      disabled={String(order.status) !== "DRAFT"}
+                    >
+                      <option value="NFCE">NFCE (Balcão)</option>
+                      <option value="NFE">NFE (Cliente CNPJ ou solicitação)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Forma de pagamento</Label>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value as any)}
+                      disabled={String(order.status) !== "DRAFT"}
+                    >
+                      <option value="PIX">PIX</option>
+                      <option value="CASH">Dinheiro</option>
+                      <option value="CARD">Cartão</option>
+                    </select>
+                  </div>
+                </div>
+
+                {paymentMethod === "CARD" ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label>Bandeira</Label>
+                      <select
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        value={cardBrand}
+                        onChange={(e) => setCardBrand(e.target.value as any)}
+                        disabled={String(order.status) !== "DRAFT"}
+                      >
+                        <option value="VISA">VISA</option>
+                        <option value="MASTERCARD">MASTERCARD</option>
+                        <option value="ELO">ELO</option>
+                        <option value="AMEX">AMEX</option>
+                        <option value="HIPERCARD">HIPERCARD</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label>Parcelas</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={installments}
+                        onChange={(e) => setInstallments(e.target.value)}
+                        disabled={String(order.status) !== "DRAFT"}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-1">
+                  <Label>Observação</Label>
+                  <Input
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                    placeholder="Ex.: cliente vai pagar no PIX do balcão / levar troco / etc."
+                    disabled={String(order.status) !== "DRAFT"}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={saveIntentMut.isPending || String(order.status) !== "DRAFT"}
+                    onClick={() =>
+                      saveIntentMut.mutate({
+                        requestedDocType,
+                        paymentMethod,
+                        cardBrand: paymentMethod === "CARD" ? cardBrand : null,
+                        installments: paymentMethod === "CARD" ? Number(installments || "1") : null,
+                        paymentNote,
+                      })
+                    }
+                  >
+                    {saveIntentMut.isPending ? "Salvando..." : "Salvar intenção"}
+                  </Button>
+
+                  <Button
+                    disabled={sendToCashierMut.isPending || String(order.status) !== "DRAFT" || (order.items ?? []).length === 0}
+                    onClick={() =>
+                      sendToCashierMut.mutate({
+                        requestedDocType,
+                        paymentMethod,
+                        cardBrand: paymentMethod === "CARD" ? cardBrand : null,
+                        installments: paymentMethod === "CARD" ? Number(installments || "1") : null,
+                        paymentNote,
+                      })
+                    }
+                    title={(order.items ?? []).length === 0 ? "Adicione itens antes de enviar ao caixa." : "Envia como rascunho (DRAFT) para o PDV."}
+                  >
+                    {sendToCashierMut.isPending ? "Enviando..." : "Enviar ao Caixa"}
+                  </Button>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  O pedido vai para a fila do PDV como <b>DRAFT</b>. O caixa recebe, emite fiscal e só então confirma (gera OP e reserva estoque).
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {msg && <p className="text-sm text-muted-foreground">{msg}</p>}

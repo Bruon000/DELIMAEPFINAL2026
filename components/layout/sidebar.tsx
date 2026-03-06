@@ -79,6 +79,7 @@ const mainNav: NavItem[] = [
     href: "/financeiro",
     icon: Wallet,
     children: [
+      { title: "PDV (Caixa)", href: "/financeiro/pdv" },
       { title: "Contas a Receber", href: "/financeiro/contas-receber" },
       { title: "Caixa", href: "/financeiro/caixa" },
       { title: "Contas a Pagar", href: "/financeiro/contas-pagar" },
