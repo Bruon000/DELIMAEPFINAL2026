@@ -77,8 +77,6 @@ export default function FiscalDocumentoDetalhePage() {
   const [cancelOpen, setCancelOpen] = React.useState(false);
   const [cancelReason, setCancelReason] = React.useState("Cancelado por solicitação do cliente");
 
-  const [sentNote, setSentNote] = React.useState("Enviado ao contador");
-
   const cancelMut = useMutation({
     mutationFn: () => postCancel(id, cancelReason),
     onSuccess: async () => {
@@ -91,7 +89,7 @@ export default function FiscalDocumentoDetalhePage() {
   });
 
   const markSentMut = useMutation({
-    mutationFn: () => postMarkSent(id, sentNote),
+    mutationFn: () => postMarkSent(id, "Enviado ao contador"),
     onSuccess: async () => {
       toast.success("Marcado como enviado ao contador.");
       await qc.invalidateQueries({ queryKey: ["fiscal-invoice", id] });
@@ -113,7 +111,7 @@ export default function FiscalDocumentoDetalhePage() {
       <PageHeader
         title="Documento Fiscal"
         subtitle={inv ? `Tipo: ${inv.docType} · Status: ${inv.status}` : "Carregando..."}
-        right={
+        actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={downloadPreview} disabled={!inv || invQ.isLoading}>
               <FileDown className="mr-2 h-4 w-4" />
@@ -193,3 +191,4 @@ export default function FiscalDocumentoDetalhePage() {
     </div>
   );
 }
+

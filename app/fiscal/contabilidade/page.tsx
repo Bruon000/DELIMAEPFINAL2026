@@ -74,54 +74,60 @@ export default function ContabilidadeExportarMesPage() {
         subtitle="Exportar mês para contador externo (CSV) e marcar como enviado."
       />
 
-      <FiltersShell>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div>
-            <Label>Mês (YYYY-MM)</Label>
-            <Input value={ym} onChange={(e) => setYm(e.target.value)} placeholder="2026-03" />
-          </div>
+      <FiltersShell
+        search=""
+        onSearchChange={() => {}}
+        leftSlot={
+          <>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div>
+                <Label>Mês (YYYY-MM)</Label>
+                <Input value={ym} onChange={(e) => setYm(e.target.value)} placeholder="2026-03" />
+              </div>
 
-          <div className="text-sm">
-            <div className="mt-6 rounded-md border bg-card p-3">
-              <div><span className="text-muted-foreground">Período:</span> {from} a {to}</div>
-              <div className="mt-1"><span className="text-muted-foreground">Vencimento Simples:</span> {venc} (dia 20 do mês seguinte)</div>
+              <div className="text-sm">
+                <div className="mt-6 rounded-md border bg-card p-3">
+                  <div><span className="text-muted-foreground">Período:</span> {from} a {to}</div>
+                  <div className="mt-1"><span className="text-muted-foreground">Vencimento Simples:</span> {venc} (dia 20 do mês seguinte)</div>
+                </div>
+              </div>
+
+              <div className="flex items-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const sp = new URLSearchParams();
+                    sp.set("from", from);
+                    sp.set("to", to);
+                    download(`/api/fiscal/invoices/export?${sp.toString()}`);
+                  }}
+                >
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Baixar CSV do mês
+                </Button>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                const sp = new URLSearchParams();
-                sp.set("from", from);
-                sp.set("to", to);
-                download(`/api/fiscal/invoices/export?${sp.toString()}`);
-              }}
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              Baixar CSV do mês
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="md:col-span-2">
-            <Label>Observação (opcional)</Label>
-            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Enviado por e-mail / WhatsApp" />
-          </div>
-          <div className="flex items-end">
-            <Button
-              variant="secondary"
-              onClick={() => bulkMut.mutate()}
-              disabled={bulkMut.isPending}
-              className="w-full"
-            >
-              {bulkMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-              Marcar mês como enviado
-            </Button>
-          </div>
-        </div>
-      </FiltersShell>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="md:col-span-2">
+                <Label>Observação (opcional)</Label>
+                <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Enviado por e-mail / WhatsApp" />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="secondary"
+                  onClick={() => bulkMut.mutate()}
+                  disabled={bulkMut.isPending}
+                  className="w-full"
+                >
+                  {bulkMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                  Marcar mês como enviado
+                </Button>
+              </div>
+            </div>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader>

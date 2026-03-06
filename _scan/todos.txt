@@ -1,8 +1,0 @@
-
-Path                                                  LineNumber Line
-----                                                  ---------- ----
-C:\Users\BruoN\DELIMAEPFINAL2026\prisma\schema.prisma        631   checklist    Json? // stub
-C:\Users\BruoN\DELIMAEPFINAL2026\prisma\schema.prisma        632   photos       String[] // URLs stub
-C:\Users\BruoN\DELIMAEPFINAL2026\prisma\schema.prisma        743 // ========== 9) BOLETOS (Stub plugável) ==========
-C:\Users\BruoN\DELIMAEPFINAL2026\prisma\schema.prisma        760 // ========== 10) FISCAL (Stub) ==========
-

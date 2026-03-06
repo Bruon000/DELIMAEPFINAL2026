@@ -231,7 +231,7 @@ export default function FiscalDocumentosPage() {
       <PageHeader
         title="Documentos Fiscais"
         subtitle="NFC-e, NF-e, CT-e, MDF-e (prévia) — prontos para plugar emissor depois."
-        right={
+        actions={
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -249,69 +249,75 @@ export default function FiscalDocumentosPage() {
         }
       />
 
-      <FiltersShell>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div>
-            <Label>Tipo</Label>
-            <Input
-              value={docType}
-              onChange={(e) => setDocType(e.target.value)}
-              placeholder='ALL ou "NFE" / "NFCE" / "CTE" / "MDFE"'
-            />
-          </div>
-          <div>
-            <Label>Status</Label>
-            <Input
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              placeholder='ALL ou "DRAFT" / "PENDING" / "CANCELLED"...'
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setDocType("ALL");
-                setStatus("ALL");
-                const mr = monthRange();
-                setMonthFrom(mr.from);
-                setMonthTo(mr.to);
-                toast.info("Filtros limpos.");
-              }}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              Limpar
-            </Button>
-          </div>
-        </div>
+      <FiltersShell
+        search=""
+        onSearchChange={() => {}}
+        leftSlot={
+          <>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div>
+                <Label>Tipo</Label>
+                <Input
+                  value={docType}
+                  onChange={(e) => setDocType(e.target.value)}
+                  placeholder='ALL ou "NFE" / "NFCE" / "CTE" / "MDFE"'
+                />
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Input
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  placeholder='ALL ou "DRAFT" / "PENDING" / "CANCELLED"...'
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setDocType("ALL");
+                    setStatus("ALL");
+                    const mr = monthRange();
+                    setMonthFrom(mr.from);
+                    setMonthTo(mr.to);
+                    toast.info("Filtros limpos.");
+                  }}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Limpar
+                </Button>
+              </div>
+            </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div>
-            <Label>De (YYYY-MM-DD)</Label>
-            <Input value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} placeholder="2026-03-01" />
-          </div>
-          <div>
-            <Label>Até (YYYY-MM-DD)</Label>
-            <Input value={monthTo} onChange={(e) => setMonthTo(e.target.value)} placeholder="2026-03-31" />
-          </div>
-          <div className="flex items-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                const sp = new URLSearchParams();
-                sp.set("from", monthFrom);
-                sp.set("to", monthTo);
-                if (docType && docType !== "ALL") sp.set("docType", docType);
-                if (status && status !== "ALL") sp.set("status", status);
-                download(`/api/fiscal/invoices/export?${sp.toString()}`);
-              }}
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              Exportar CSV
-            </Button>
-          </div>
-        </div>
-      </FiltersShell>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div>
+                <Label>De (YYYY-MM-DD)</Label>
+                <Input value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} placeholder="2026-03-01" />
+              </div>
+              <div>
+                <Label>Até (YYYY-MM-DD)</Label>
+                <Input value={monthTo} onChange={(e) => setMonthTo(e.target.value)} placeholder="2026-03-31" />
+              </div>
+              <div className="flex items-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const sp = new URLSearchParams();
+                    sp.set("from", monthFrom);
+                    sp.set("to", monthTo);
+                    if (docType && docType !== "ALL") sp.set("docType", docType);
+                    if (status && status !== "ALL") sp.set("status", status);
+                    download(`/api/fiscal/invoices/export?${sp.toString()}`);
+                  }}
+                >
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Exportar CSV
+                </Button>
+              </div>
+            </div>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader>

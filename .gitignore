@@ -60,3 +60,7 @@ _inventario/
 # temp files
 tmp_route_before.txt
 
+
+# scans/diagnosticos
+_scan/
+

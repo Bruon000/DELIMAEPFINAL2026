@@ -29,7 +29,8 @@ function mockId(prefix: string) {
  * Depois você troca por Nuvem Fiscal (ou outro) sem mexer no resto.
  */
 export const mockProvider: FiscalProvider = {
-  async emit({ companyId, invoiceId, docType }) {
+  async emit(args) {
+    const { invoiceId, docType } = args;
     const externalId = mockId(docType.toLowerCase());
     const model = docType === "NFCE" ? 65 : docType === "NFE" ? 55 : undefined;
 
@@ -74,3 +75,4 @@ export function getFiscalProvider(): FiscalProvider {
   // no futuro: escolher via env (NUVEM_FISCAL / TECNOSPEED / etc.)
   return mockProvider;
 }
+
