@@ -20,12 +20,17 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const inv = await prisma.fiscalInvoice.findFirst({ where: { id, companyId } });
   if (!inv) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  const provider = getFiscalProvider();
-  const result = await provider.emit({
-    companyId,
-    invoiceId: id,
-    docType: inv.docType as "NFE" | "NFCE" | "CTE" | "MDFE" | "NFSE",
-  });
+  const provider = await getFiscalProvider(companyId);
+  let result;
+  try {
+    result = await provider.emit({ companyId, invoiceId: id, docType: inv.docType as any });
+  } catch (e: any) {
+    const msg = e?.message ?? "emit_failed";
+    if (String(msg).startsWith("fiscal_provider_not_configured:")) {
+      return NextResponse.json({ error: "provider_not_configured", message: msg }, { status: 409 });
+    }
+    return NextResponse.json({ error: "emit_failed", message: msg }, { status: 400 });
+  }
 
   // grava metadados retornados (sem inventar número!)
   const updated = await prisma.fiscalInvoice.update({

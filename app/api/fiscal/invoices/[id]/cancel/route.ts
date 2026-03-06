@@ -23,8 +23,16 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const inv = await prisma.fiscalInvoice.findFirst({ where: { id, companyId } });
   if (!inv) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  const provider = getFiscalProvider();
-  await provider.cancel({ companyId, invoiceId: id, reason });
+  const provider = await getFiscalProvider(companyId);
+  try {
+    await provider.cancel({ companyId, invoiceId: id, reason });
+  } catch (e: any) {
+    const msg = e?.message ?? "cancel_failed";
+    if (String(msg).startsWith("fiscal_provider_not_configured:")) {
+      return NextResponse.json({ error: "provider_not_configured", message: msg }, { status: 409 });
+    }
+    return NextResponse.json({ error: "cancel_failed", message: msg }, { status: 400 });
+  }
 
   const updated = await prisma.fiscalInvoice.update({
     where: { id },
@@ -34,3 +42,4 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   return NextResponse.json({ ok: true, invoice: updated });
 }
+

@@ -71,8 +71,41 @@ export const mockProvider: FiscalProvider = {
   },
 };
 
-export function getFiscalProvider(): FiscalProvider {
-  // no futuro: escolher via env (NUVEM_FISCAL / TECNOSPEED / etc.)
-  return mockProvider;
+function notConfiguredProvider(providerName: string): FiscalProvider {
+  const err = () => {
+    const e = new Error(`fiscal_provider_not_configured:${providerName}`);
+    (e as any).code = "fiscal_provider_not_configured";
+    return e;
+  };
+  return {
+    async emit() {
+      throw err();
+    },
+    async cancel() {
+      throw err();
+    },
+    async consult() {
+      throw err();
+    },
+  };
+}
+
+/**
+ * Escolhe provider por empresa.
+ * - MOCK: sempre disponível
+ * - NUVEMFISCAL/TECNOSPEED/FOCUSNFE: exige token configurado
+ */
+export async function getFiscalProvider(companyId: string): Promise<FiscalProvider> {
+  const cfg = await prisma.fiscalConfig.findUnique({ where: { companyId } });
+  const provider = String(cfg?.provider ?? "MOCK").toUpperCase();
+  const token = String(cfg?.providerToken ?? "").trim();
+
+  if (provider === "MOCK" || !provider) return mockProvider;
+
+  if (!token) return notConfiguredProvider(provider);
+
+  // Placeholder: aqui entra a implementação real no futuro.
+  // Por enquanto, mantém erro claro (mas já deixa o switch pronto).
+  return notConfiguredProvider(provider);
 }
 

@@ -8,16 +8,12 @@ export async function GET() {
 
   const companyId = gate.session.user!.companyId as string;
   const cfg = await prisma.fiscalConfig.findUnique({ where: { companyId } });
-  const c = cfg as typeof cfg & { provider?: string | null; providerToken?: string | null } | null;
-
   return NextResponse.json({
-    config: c
-      ? {
-          environment: c.environment ?? "HOMOLOG",
-          provider: c.provider ?? "MOCK",
-          providerToken: c.providerToken ?? "",
-        }
-      : { environment: "HOMOLOG", provider: "MOCK", providerToken: "" },
+    config: {
+      environment: cfg?.environment ?? "HOMOLOG",
+      provider: cfg?.provider ?? "MOCK",
+      providerToken: cfg?.providerToken ?? "",
+    },
   });
 }
 
@@ -36,20 +32,18 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "invalid_provider", allowed }, { status: 400 });
   }
 
-  // provider/providerToken existem no schema; cast até prisma generate ser rodado após a migration
   const updated = await prisma.fiscalConfig.upsert({
     where: { companyId },
-    update: { provider, providerToken } as never,
-    create: { companyId, provider, providerToken } as never,
+    update: { provider, providerToken },
+    create: { companyId, provider, providerToken },
   });
-  const u = updated as typeof updated & { provider?: string | null; providerToken?: string | null };
 
   return NextResponse.json({
     ok: true,
     config: {
-      environment: u.environment ?? "HOMOLOG",
-      provider: u.provider ?? "MOCK",
-      providerToken: u.providerToken ?? "",
+      environment: updated.environment ?? "HOMOLOG",
+      provider: updated.provider ?? "MOCK",
+      providerToken: updated.providerToken ?? "",
     },
   });
 }
