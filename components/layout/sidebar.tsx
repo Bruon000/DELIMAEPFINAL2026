@@ -112,7 +112,10 @@ const bottomNav: NavItem[] = [
     title: "Configurações",
     href: "/configuracoes",
     icon: Settings,
-    children: [{ title: "Preços", href: "/configuracoes/precos" }],
+    children: [
+      { title: "Preços", href: "/configuracoes/precos" },
+      { title: "Fiscal", href: "/configuracoes/fiscal" },
+    ],
   },
 ];
 

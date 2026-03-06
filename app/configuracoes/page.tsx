@@ -15,6 +15,11 @@ export default function ConfiguracoesPage() {
           <Button asChild variant="outline"><Link href="/configuracoes/empresa">Abrir</Link></Button>
         </div>
         <div className="border rounded p-4 space-y-2">
+          <div className="font-medium">Config Fiscal (emissor)</div>
+          <div className="text-sm text-muted-foreground">Provider e token do emissor (MOCK, Nuvem Fiscal, etc.).</div>
+          <Button asChild variant="outline"><Link href="/configuracoes/fiscal">Abrir</Link></Button>
+        </div>
+        <div className="border rounded p-4 space-y-2">
           <div className="font-medium">Preços (Premium)</div>
           <div className="text-sm text-muted-foreground">Defina regra de sugestão (margem/markup/arredondamento).</div>
           <Button asChild variant="outline"><Link href="/configuracoes/precos">Abrir</Link></Button>

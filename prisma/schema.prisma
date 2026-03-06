@@ -785,6 +785,9 @@ model FiscalConfig {
   defaultCfopId String?
   defaultCfop   FiscalCfop? @relation(fields: [defaultCfopId], references: [id], onDelete: SetNull)
 
+  provider     String?  @default("MOCK") // MOCK, NUVEMFISCAL, TECNOSPEED, FOCUSNFE
+  providerToken String?
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
