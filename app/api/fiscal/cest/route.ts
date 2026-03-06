@@ -10,6 +10,19 @@ export async function GET(req: Request) {
   const q = String(url.searchParams.get("q") ?? "").trim();
   const take = Math.min(Number(url.searchParams.get("take") ?? 8), 20);
 
+  // Se q vazio, retorna lista inicial
+  if (q.length === 0) {
+    const rows = await prisma.fiscalCest.findMany({
+      orderBy: [{ code: "asc" }],
+      take,
+      select: { id: true, code: true, description: true },
+    });
+    return NextResponse.json({
+      q,
+      results: rows.map((r) => ({ ...r, label: `${r.code} - ${r.description}` })),
+    });
+  }
+
   if (q.length < 2) return NextResponse.json({ q, results: [] });
 
   const rows = await prisma.fiscalCest.findMany({

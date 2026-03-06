@@ -310,13 +310,13 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
   const cestQ = useQuery({
     queryKey: ["fiscal-cest", qCest],
     queryFn: () => searchFiscalAny("/api/fiscal/cest", qCest.trim()),
-    enabled: fiscalOpen && qCest.trim().length >= 2,
+    enabled: fiscalOpen, // lista inicial quando abrir + busca ao digitar
   });
 
   const taxProfileQ = useQuery({
     queryKey: ["fiscal-tax-profile", qTaxProfile],
     queryFn: () => searchFiscalAny("/api/fiscal/tax-profiles", qTaxProfile.trim()),
-    enabled: fiscalOpen && qTaxProfile.trim().length >= 2,
+    enabled: fiscalOpen, // deixa listar mesmo sem q (api retorna lista inicial)
   });
 
   const saveFiscalMut = useMutation({
@@ -842,6 +842,18 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                         onClick={() => {
                           setNcm(opt);
                           setQNcm(opt.label);
+                          // sugestão simples de CEST ao escolher NCM (não sobrescreve se já tiver)
+                          if (!cest) {
+                            const text = (opt.label ?? "").toLowerCase();
+                            if (text.includes("tela") || text.includes("estrutura") || (opt.code ?? "").startsWith("73")) {
+                              const first = (cestQ.data ?? [])[0] ?? null;
+                              if (first) {
+                                setCest(first);
+                                setQCest(first.label);
+                                toast.info("CEST sugerido automaticamente com base no NCM.");
+                              }
+                            }
+                          }
                         }}
                       >
                         {opt.label}
