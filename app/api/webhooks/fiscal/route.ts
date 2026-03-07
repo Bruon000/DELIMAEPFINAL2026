@@ -21,6 +21,8 @@ export async function POST(req: Request) {
   const invoiceId = String(body?.invoiceId ?? "").trim();
   const externalId = String(body?.externalId ?? "").trim();
   const sourceKind = source === "manual_refresh" || source === "fiscal_stub" ? "stub" : "provider";
+  const sig = String(req.headers.get("x-webhook-secret") ?? "").trim();
+
   const nextStatus = String(body?.status ?? "").trim().toUpperCase();
   const key = String(body?.key ?? "").trim() || null;
   const xmlUrl = String(body?.xmlUrl ?? "").trim() || null;
@@ -33,6 +35,34 @@ export async function POST(req: Request) {
       { error: "missing_invoice_reference", message: "Envie invoiceId ou externalId." },
       { status: 400 },
     );
+  }
+
+  // valida secret apenas quando webhook for de provider real
+  if (sourceKind === "provider") {
+    const invoiceRef = invoiceId
+      ? await prisma.fiscalInvoice.findFirst({
+          where: { id: invoiceId } as any,
+          select: { companyId: true } as any,
+        } as any)
+      : await prisma.fiscalInvoice.findFirst({
+          where: { externalId } as any,
+          select: { companyId: true } as any,
+        } as any);
+
+    const cfg = invoiceRef?.companyId
+      ? await prisma.fiscalConfig.findUnique({
+          where: { companyId: invoiceRef.companyId } as any,
+          select: { webhookSecret: true } as any,
+        } as any)
+      : null;
+
+    const expected = String(cfg?.webhookSecret ?? "").trim();
+    if (!expected || sig !== expected) {
+      await prisma.webhookLog.create({
+        data: { source, payload: body ?? {}, status: 401 } as any,
+      } as any);
+      return NextResponse.json({ error: "invalid_webhook_signature" }, { status: 401 });
+    }
   }
 
   const log = await prisma.webhookLog.create({

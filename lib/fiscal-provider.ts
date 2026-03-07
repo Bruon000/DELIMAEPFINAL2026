@@ -14,10 +14,26 @@ export type ProviderEmitResult = {
   raw?: any;
 };
 
+export type ProviderConsultResult = {
+  status: string;
+  externalId?: string;
+  key?: string;
+  pdfUrl?: string;
+  xmlUrl?: string;
+  issuedAt?: string;
+  raw?: any;
+};
+
+export type ProviderCancelResult = {
+  status: "CANCELLED" | string;
+  cancelledAt?: string;
+  raw?: any;
+};
+
 export type FiscalProvider = {
   emit: (args: { companyId: string; invoiceId: string; docType: FiscalDocType }) => Promise<ProviderEmitResult>;
-  cancel: (args: { companyId: string; invoiceId: string; reason: string }) => Promise<{ status: "CANCELLED"; raw?: any }>;
-  consult: (args: { companyId: string; invoiceId: string }) => Promise<{ status: string; raw?: any }>;
+  cancel: (args: { companyId: string; invoiceId: string; reason: string }) => Promise<ProviderCancelResult>;
+  consult: (args: { companyId: string; invoiceId: string }) => Promise<ProviderConsultResult>;
 };
 
 function mockId(prefix: string) {
@@ -67,7 +83,15 @@ export const mockProvider: FiscalProvider = {
 
   async consult({ invoiceId }) {
     const inv = await prisma.fiscalInvoice.findUnique({ where: { id: invoiceId } });
-    return { status: inv?.status ?? "UNKNOWN", raw: inv?.payload ?? null };
+    return {
+      status: inv?.status ?? "UNKNOWN",
+      externalId: inv?.externalId ?? undefined,
+      key: inv?.key ?? undefined,
+      pdfUrl: inv?.pdfUrl ?? undefined,
+      xmlUrl: inv?.xmlUrl ?? undefined,
+      issuedAt: inv?.issuedAt ? inv.issuedAt.toISOString() : undefined,
+      raw: inv?.payload ?? null,
+    };
   },
 };
 

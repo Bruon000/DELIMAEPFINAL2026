@@ -39,6 +39,11 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
     where: { id } as any,
     data: {
       status: String(result?.status ?? inv.status) as any,
+      externalId: result?.externalId ?? undefined,
+      key: result?.key ?? undefined,
+      pdfUrl: result?.pdfUrl ?? undefined,
+      xmlUrl: result?.xmlUrl ?? undefined,
+      issuedAt: result?.issuedAt ? new Date(result.issuedAt) : undefined,
       payload: {
         ...(typeof inv.payload === "object" && inv.payload !== null ? inv.payload : {}),
         providerConsult: {
