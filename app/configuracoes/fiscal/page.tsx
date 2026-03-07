@@ -17,7 +17,12 @@ async function fetchConfig() {
   return data?.config ?? null;
 }
 
-async function saveConfig(payload: { provider: string; providerToken: string }) {
+async function saveConfig(payload: {
+  provider: string;
+  providerToken: string;
+  providerBaseUrl: string;
+  webhookSecret: string;
+}) {
   const res = await fetch("/api/fiscal/config", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -34,15 +39,19 @@ export default function ConfigFiscalPage() {
 
   const [provider, setProvider] = React.useState("MOCK");
   const [providerToken, setProviderToken] = React.useState("");
+  const [providerBaseUrl, setProviderBaseUrl] = React.useState("");
+  const [webhookSecret, setWebhookSecret] = React.useState("");
 
   React.useEffect(() => {
     if (!q.data) return;
     setProvider(String(q.data?.provider ?? "MOCK"));
     setProviderToken(String(q.data?.providerToken ?? ""));
+    setProviderBaseUrl(String(q.data?.providerBaseUrl ?? ""));
+    setWebhookSecret(String(q.data?.webhookSecret ?? ""));
   }, [q.data]);
 
   const mut = useMutation({
-    mutationFn: () => saveConfig({ provider, providerToken }),
+    mutationFn: () => saveConfig({ provider, providerToken, providerBaseUrl, webhookSecret }),
     onSuccess: async () => {
       toast.success("Config fiscal salva.");
       await qc.invalidateQueries({ queryKey: ["fiscal-config"] });
@@ -91,6 +100,24 @@ export default function ConfigFiscalPage() {
               <div className="text-xs text-muted-foreground">
                 Apenas ADMIN. O CAIXA só emite.
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Base URL do provider</Label>
+              <Input
+                value={providerBaseUrl}
+                onChange={(e) => setProviderBaseUrl(e.target.value)}
+                placeholder="https://api.do-emissor.com"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Webhook secret</Label>
+              <Input
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+                placeholder="Segredo para validar callbacks"
+              />
             </div>
           </div>
 

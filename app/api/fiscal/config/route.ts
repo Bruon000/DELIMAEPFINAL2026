@@ -13,6 +13,8 @@ export async function GET() {
       environment: cfg?.environment ?? "HOMOLOG",
       provider: cfg?.provider ?? "MOCK",
       providerToken: cfg?.providerToken ?? "",
+      providerBaseUrl: (cfg as any)?.providerBaseUrl ?? "",
+      webhookSecret: (cfg as any)?.webhookSecret ?? "",
     },
   });
 }
@@ -22,10 +24,17 @@ export async function PATCH(req: Request) {
   if (!gate.ok) return gate.res;
 
   const companyId = gate.session.user!.companyId as string;
-  const body = (await req.json().catch(() => null)) as { provider?: string; providerToken?: string } | null;
+  const body = (await req.json().catch(() => null)) as {
+    provider?: string;
+    providerToken?: string;
+    providerBaseUrl?: string;
+    webhookSecret?: string;
+  } | null;
 
   const provider = body?.provider ? String(body.provider).trim().toUpperCase() : "MOCK";
   const providerToken = body?.providerToken ? String(body.providerToken).trim() : "";
+  const providerBaseUrl = body?.providerBaseUrl ? String(body.providerBaseUrl).trim() : "";
+  const webhookSecret = body?.webhookSecret ? String(body.webhookSecret).trim() : "";
 
   const allowed = ["MOCK", "NUVEMFISCAL", "TECNOSPEED", "FOCUSNFE"];
   if (!allowed.includes(provider)) {
@@ -34,8 +43,19 @@ export async function PATCH(req: Request) {
 
   const updated = await prisma.fiscalConfig.upsert({
     where: { companyId },
-    update: { provider, providerToken },
-    create: { companyId, provider, providerToken },
+    update: {
+      provider,
+      providerToken,
+      providerBaseUrl,
+      webhookSecret,
+    } as any,
+    create: {
+      companyId,
+      provider,
+      providerToken,
+      providerBaseUrl,
+      webhookSecret,
+    } as any,
   });
 
   return NextResponse.json({
@@ -44,6 +64,8 @@ export async function PATCH(req: Request) {
       environment: updated.environment ?? "HOMOLOG",
       provider: updated.provider ?? "MOCK",
       providerToken: updated.providerToken ?? "",
+      providerBaseUrl: (updated as any)?.providerBaseUrl ?? "",
+      webhookSecret: (updated as any)?.webhookSecret ?? "",
     },
   });
 }

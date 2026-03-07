@@ -76,6 +76,15 @@ async function postRefreshStatus(id: string) {
   return data;
 }
 
+async function postConsultProvider(id: string) {
+  const res = await fetch(`/api/fiscal/invoices/${id}/consult`, {
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao consultar provider");
+  return data;
+}
+
 export default function FiscalDocumentoDetalhePage() {
   const params = useParams();
   const sp = useSearchParams();
@@ -126,6 +135,16 @@ export default function FiscalDocumentoDetalhePage() {
       await qc.invalidateQueries({ queryKey: ["fiscal-invoices"] });
     },
     onError: (e: Error) => toast.error(e?.message ?? "Erro ao atualizar status"),
+  });
+
+  const consultMut = useMutation({
+    mutationFn: () => postConsultProvider(id),
+    onSuccess: async () => {
+      toast.success("Consulta ao provider executada.");
+      await qc.invalidateQueries({ queryKey: ["fiscal-invoice", id] });
+      await qc.invalidateQueries({ queryKey: ["fiscal-invoices"] });
+    },
+    onError: (e: Error) => toast.error(e?.message ?? "Erro ao consultar provider"),
   });
 
   const inv = invQ.data?.invoice ?? null;
@@ -239,6 +258,16 @@ export default function FiscalDocumentoDetalhePage() {
             >
               {refreshMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Atualizar status
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => consultMut.mutate()}
+              disabled={!inv || consultMut.isPending}
+              title="Consulta status diretamente no provider configurado"
+            >
+              {consultMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Consultar provider
             </Button>
 
             <Button

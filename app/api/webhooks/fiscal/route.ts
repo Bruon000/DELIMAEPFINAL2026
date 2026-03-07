@@ -20,6 +20,7 @@ export async function POST(req: Request) {
   const source = String(body?.source ?? "fiscal_stub");
   const invoiceId = String(body?.invoiceId ?? "").trim();
   const externalId = String(body?.externalId ?? "").trim();
+  const sourceKind = source === "manual_refresh" || source === "fiscal_stub" ? "stub" : "provider";
   const nextStatus = String(body?.status ?? "").trim().toUpperCase();
   const key = String(body?.key ?? "").trim() || null;
   const xmlUrl = String(body?.xmlUrl ?? "").trim() || null;
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
         ...(typeof invoice.payload === "object" && invoice.payload !== null ? invoice.payload : {}),
         webhookLastUpdate: {
           source,
+          sourceKind,
           receivedAt: new Date().toISOString(),
           status: nextStatus || invoice.status,
           raw: body?.raw ?? body ?? null,
