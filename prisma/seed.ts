@@ -261,6 +261,23 @@ async function main() {
     }
   }
 
+  // Garantir CompanyFiscal (1:1) para cada company
+  const companies = await prisma.company.findMany({ select: { id: true, name: true, document: true } } as any);
+  for (const c of companies) {
+    const exists = await prisma.companyFiscal.findUnique({ where: { companyId: c.id } as any, select: { id: true } as any } as any);
+    if (!exists?.id) {
+      await prisma.companyFiscal.create({
+        data: {
+          companyId: c.id,
+          tradeName: c.name ?? null,
+          legalName: c.name ?? null,
+          crt: null,
+          ie: null,
+        } as any,
+      } as any);
+    }
+  }
+
   console.log("Seed OK:", {
     admin: "admin@demo.com / admin123",
     company: company.name,

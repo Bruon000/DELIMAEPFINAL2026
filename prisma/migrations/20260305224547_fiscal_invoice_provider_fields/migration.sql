@@ -1,2 +1,4 @@
--- AlterTable
-ALTER TABLE "FiscalInvoice" ALTER COLUMN "docType" DROP DEFAULT;
+-- no-op
+-- Esta migration antiga ficou inconsistente:
+-- tentava ALTER COLUMN "docType" antes da coluna existir.
+-- Mantida vazia para preservar a cadeia de migrations.

@@ -20,6 +20,57 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const inv = await prisma.fiscalInvoice.findFirst({ where: { id, companyId } });
   if (!inv) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
+  // ===== valida emitente mínimo (para emissor real) =====
+  // (não bloqueia MDFE/CTE por enquanto; foco em NFE/NFCE)
+  const docType = String(inv.docType ?? "").toUpperCase();
+  if (docType === "NFE" || docType === "NFCE") {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId } as any,
+      select: { document: true } as any,
+    } as any);
+    const f = await prisma.companyFiscal.findUnique({
+      where: { companyId } as any,
+      select: {
+        legalName: true,
+        tradeName: true,
+        ie: true,
+        crt: true,
+        addressStreet: true,
+        addressNumber: true,
+        addressDistrict: true,
+        addressCity: true,
+        addressState: true,
+        addressZip: true,
+        cityCodeIbge: true,
+      } as any,
+    } as any);
+
+    const missing: string[] = [];
+    if (!company?.document) missing.push("company.document(CNPJ)");
+    if (!f?.legalName) missing.push("companyFiscal.legalName(razao social)");
+    if (!f?.tradeName) missing.push("companyFiscal.tradeName(nome fantasia)");
+    if (!f?.ie) missing.push("companyFiscal.ie(IE)");
+    if (!f?.crt) missing.push("companyFiscal.crt(CRT)");
+    if (!f?.addressStreet) missing.push("companyFiscal.addressStreet");
+    if (!f?.addressNumber) missing.push("companyFiscal.addressNumber");
+    if (!f?.addressDistrict) missing.push("companyFiscal.addressDistrict");
+    if (!f?.addressCity) missing.push("companyFiscal.addressCity");
+    if (!f?.addressState) missing.push("companyFiscal.addressState(UF)");
+    if (!f?.addressZip) missing.push("companyFiscal.addressZip(CEP)");
+    if (!f?.cityCodeIbge) missing.push("companyFiscal.cityCodeIbge(cMun IBGE)");
+
+    if (missing.length) {
+      return NextResponse.json(
+        {
+          error: "emitente_incompleto",
+          message: "Complete os dados fiscais do emitente antes de emitir.",
+          missing,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const provider = await getFiscalProvider(companyId);
   let result;
   try {
