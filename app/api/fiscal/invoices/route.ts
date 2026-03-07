@@ -18,12 +18,36 @@ export async function GET(req: Request) {
 
   const docType = String(url.searchParams.get("docType") ?? "").trim(); // NFE/NFCE/CTE/MDFE
   const status = String(url.searchParams.get("status") ?? "").trim();
+  const orderId = String(url.searchParams.get("orderId") ?? "").trim();
+  const latest = String(url.searchParams.get("latest") ?? "").trim(); // "1" para pegar só a última
   const take = Math.min(Number(url.searchParams.get("take") ?? 30), 200);
   const cursor = String(url.searchParams.get("cursor") ?? "").trim();
 
-  const where: { companyId: string; docType?: string; status?: string } = { companyId };
+  const where: { companyId: string; docType?: string; status?: string; orderId?: string } = { companyId };
   if (docType) where.docType = docType;
   if (status) where.status = status;
+  if (orderId) where.orderId = orderId;
+
+  if (latest === "1") {
+    const row = await prisma.fiscalInvoice.findFirst({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        docType: true,
+        model: true,
+        status: true,
+        orderId: true,
+        number: true,
+        serie: true,
+        key: true,
+        issuedAt: true,
+        createdAt: true,
+        externalId: true,
+      },
+    });
+    return NextResponse.json({ row: row ?? null });
+  }
 
   const rows = await prisma.fiscalInvoice.findMany({
     where,
@@ -67,6 +91,19 @@ export async function POST(req: Request) {
   const orderId = String(body?.orderId ?? "").trim();
   const requestedDocType = String(body?.docType ?? "").trim(); // NFE/NFCE/CTE/MDFE (opcional)
   if (!orderId) return NextResponse.json({ error: "missing_params" }, { status: 400 });
+
+  // ===== REGRA PDV: só cria documento fiscal após pagamento (AR PAID) =====
+  const paidAr = await prisma.accountsReceivable.findFirst({
+    where: { companyId, orderId, status: "PAID" as any } as any,
+    orderBy: { paidAt: "desc" } as any,
+    select: { id: true, paidAt: true } as any,
+  } as any);
+  if (!paidAr) {
+    return NextResponse.json(
+      { error: "payment_required_before_fiscal", message: "Pagamento não encontrado. Receba no PDV antes de criar o fiscal." },
+      { status: 409 },
+    );
+  }
 
   const order = await prisma.order.findFirst({
     where: { id: orderId, companyId, deletedAt: null },
@@ -121,6 +158,16 @@ export async function POST(req: Request) {
   const docType = (requestedDocType || suggestedDocType).toUpperCase();
   if (!allowedDocTypes.includes(docType)) {
     return NextResponse.json({ error: "invalid_docType", allowed: allowedDocTypes }, { status: 400 });
+  }
+
+  // ===== Evita duplicar: se já existe DRAFT para o mesmo orderId+docType, retorna o existente =====
+  const existingDraft = await prisma.fiscalInvoice.findFirst({
+    where: { companyId, orderId, docType, status: "DRAFT" } as any,
+    orderBy: [{ createdAt: "desc" }] as any,
+    select: { id: true, status: true, docType: true, model: true, orderId: true, createdAt: true } as any,
+  } as any);
+  if (existingDraft?.id) {
+    return NextResponse.json({ ok: true, invoice: existingDraft, reused: true });
   }
 
   // Payload padronizado para qualquer emissor (você vai mapear depois)
@@ -191,5 +238,5 @@ export async function POST(req: Request) {
     select: { id: true, status: true, docType: true, model: true, orderId: true, createdAt: true },
   });
 
-  return NextResponse.json({ ok: true, invoice });
+  return NextResponse.json({ ok: true, invoice, reused: false });
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, FileDown, Ban, CheckCircle2 } from "lucide-react";
+import { Loader2, FileDown, Ban, CheckCircle2, Copy, Download } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ async function postMarkSent(id: string, note?: string) {
 
 export default function FiscalDocumentoDetalhePage() {
   const params = useParams();
+  const sp = useSearchParams();
   const id = String(params?.id ?? "");
 
   const qc = useQueryClient();
@@ -101,6 +103,77 @@ export default function FiscalDocumentoDetalhePage() {
   const inv = invQ.data?.invoice ?? null;
   const payload = inv?.payload ?? null;
 
+  const payloadRef = React.useRef<HTMLDivElement | null>(null);
+  const [payloadGlow, setPayloadGlow] = React.useState(false);
+
+  const focusPayload = React.useCallback(() => {
+    const el = payloadRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPayloadGlow(true);
+    window.setTimeout(() => setPayloadGlow(false), 1600);
+  }, []);
+
+  React.useEffect(() => {
+    // suporta:
+    // - /fiscal/documentos/:id?focus=payload
+    // - /fiscal/documentos/:id#payload
+    const focus = String(sp?.get("focus") ?? "").toLowerCase();
+    const hash = typeof window !== "undefined" ? String(window.location.hash ?? "") : "";
+    if (focus === "payload" || hash === "#payload") {
+      // dá tempo pro layout renderizar
+      window.setTimeout(() => focusPayload(), 120);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const from = String(sp?.get("from") ?? "").toLowerCase(); // "pdv"
+
+  const payloadText = React.useMemo(() => {
+    try {
+      return JSON.stringify(payload ?? null, null, 2);
+    } catch {
+      return String(payload ?? "");
+    }
+  }, [payload]);
+
+  const copyPayload = async () => {
+    try {
+      await navigator.clipboard.writeText(payloadText);
+      toast.success("Payload copiado.");
+    } catch {
+      // fallback (alguns browsers bloqueiam clipboard em certos contextos)
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = payloadText;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        toast.success("Payload copiado.");
+      } catch {
+        toast.error("Não foi possível copiar o payload.");
+      }
+    }
+  };
+
+  const downloadPayload = () => {
+    const filename = `payload_${id}.json`;
+    const blob = new Blob([payloadText], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success("Download do payload iniciado.");
+  };
+
   const downloadPreview = () => window.open(`/api/fiscal/invoices/${id}/preview`, "_blank", "noopener,noreferrer");
 
   if (invQ.isLoading) return <div className="p-6">Carregando...</div>;
@@ -113,6 +186,18 @@ export default function FiscalDocumentoDetalhePage() {
         subtitle={inv ? `Tipo: ${inv.docType} · Status: ${inv.status}` : "Carregando..."}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {from === "pdv" && inv?.orderId ? (
+              <Button asChild variant="outline" title="Voltar para o PDV (Caixa)">
+                <Link href={`/financeiro/pdv?open=${encodeURIComponent(String(inv.orderId))}`}>
+                  Voltar pro PDV
+                </Link>
+              </Button>
+            ) : null}
+
+            <Button variant="outline" onClick={focusPayload} disabled={!inv || invQ.isLoading}>
+              Ir para Payload
+            </Button>
+
             <Button variant="outline" onClick={downloadPreview} disabled={!inv || invQ.isLoading}>
               <FileDown className="mr-2 h-4 w-4" />
               Prévia PDF
@@ -152,13 +237,43 @@ export default function FiscalDocumentoDetalhePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card
+        id="payload"
+        ref={(node: any) => {
+          payloadRef.current = node as HTMLDivElement | null;
+        }}
+        className={payloadGlow ? "ring-2 ring-primary" : ""}
+      >
         <CardHeader>
-          <CardTitle>Payload (debug / pronto para emissor)</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>Payload (debug / pronto para emissor)</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={copyPayload}
+                disabled={!inv || invQ.isLoading}
+                title="Copia o JSON do payload para a área de transferência"
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Copiar payload
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={downloadPayload}
+                disabled={!inv || invQ.isLoading}
+                title="Baixa o payload como arquivo .json"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Baixar payload.json
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <pre className="max-h-[520px] overflow-auto rounded-md bg-muted p-3 text-xs">
-            {JSON.stringify(payload, null, 2)}
+            {payloadText}
           </pre>
         </CardContent>
       </Card>
