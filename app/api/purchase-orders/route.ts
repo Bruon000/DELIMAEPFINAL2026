@@ -31,7 +31,7 @@ export async function GET() {
 
   // Anexar nfeKey via FiscalInvoice.payload.purchaseOrderId (sem schema change)
   const invoices = await prisma.fiscalInvoice.findMany({
-    where: { companyId, type: "NF-E" as any } as any,
+    where: { companyId, docType: "NFE" as any } as any,
     select: { key: true, payload: true } as any,
   } as any);
 

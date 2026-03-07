@@ -88,7 +88,7 @@ export async function POST(req: Request) {
       where: {
         companyId,
         key: chNFe,
-        type: "NF-E",
+        docType: "NFE",
       } as any,
     } as any);
 
@@ -327,7 +327,7 @@ export async function POST(req: Request) {
           data: {
             companyId,
             key: chNFe,
-            type: "NF-E",
+            docType: "NFE",
             status: "RECEIVED",
             issuedAt,
             payload: {
@@ -341,7 +341,7 @@ export async function POST(req: Request) {
         const code = (uniqueErr as { code?: string })?.code;
         if (code === "P2002") {
           const existing = await tx.fiscalInvoice.findFirst({
-            where: { companyId, key: chNFe, type: "NF-E" } as any,
+            where: { companyId, key: chNFe, docType: "NFE" } as any,
             select: { id: true, payload: true },
           } as any);
           const payload: any = existing?.payload ?? null;

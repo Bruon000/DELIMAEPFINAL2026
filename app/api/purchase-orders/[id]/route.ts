@@ -27,7 +27,7 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   const inv = await prisma.fiscalInvoice.findFirst({
     where: {
       companyId,
-      type: "NF-E" as any,
+      docType: "NFE" as any,
       payload: { path: ["purchaseOrderId"], equals: id } as any,
     } as any,
     select: { key: true, issuedAt: true, createdAt: true } as any,
