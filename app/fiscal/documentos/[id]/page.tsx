@@ -58,6 +58,24 @@ async function postMarkSent(id: string, note?: string) {
   return data;
 }
 
+async function postRefreshStatus(id: string) {
+  const res = await fetch("/api/webhooks/fiscal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      source: "manual_refresh",
+      invoiceId: id,
+      // stub manual:
+      // se quiser simular autorização, basta marcar AUTHORIZED
+      status: "AUTHORIZED",
+      issuedAt: new Date().toISOString(),
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao atualizar status");
+  return data;
+}
+
 export default function FiscalDocumentoDetalhePage() {
   const params = useParams();
   const sp = useSearchParams();
@@ -98,6 +116,16 @@ export default function FiscalDocumentoDetalhePage() {
       await qc.invalidateQueries({ queryKey: ["fiscal-invoices"] });
     },
     onError: (e: Error) => toast.error(e?.message ?? "Erro ao marcar enviado"),
+  });
+
+  const refreshMut = useMutation({
+    mutationFn: () => postRefreshStatus(id),
+    onSuccess: async () => {
+      toast.success("Status fiscal atualizado.");
+      await qc.invalidateQueries({ queryKey: ["fiscal-invoice", id] });
+      await qc.invalidateQueries({ queryKey: ["fiscal-invoices"] });
+    },
+    onError: (e: Error) => toast.error(e?.message ?? "Erro ao atualizar status"),
   });
 
   const inv = invQ.data?.invoice ?? null;
@@ -201,6 +229,16 @@ export default function FiscalDocumentoDetalhePage() {
             <Button variant="outline" onClick={downloadPreview} disabled={!inv || invQ.isLoading}>
               <FileDown className="mr-2 h-4 w-4" />
               Prévia PDF
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => refreshMut.mutate()}
+              disabled={!inv || refreshMut.isPending}
+              title="Atualiza status fiscal via webhook stub/manual"
+            >
+              {refreshMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Atualizar status
             </Button>
 
             <Button

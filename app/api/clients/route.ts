@@ -25,6 +25,7 @@ export async function GET() {
   addressCity: true,
   addressState: true,
   addressZip: true,
+  cityCodeIbge: true,
   isActive: true,
 },
     take: 500,
@@ -53,7 +54,9 @@ const addressNumber = String(body?.addressNumber ?? "").trim();
 const addressDistrict = String(body?.addressDistrict ?? "").trim();
 const addressCity = String(body?.addressCity ?? "").trim();
 const addressState = String(body?.addressState ?? "").trim();
-const addressZip = String(body?.addressZip ?? "").trim();if (!name) return NextResponse.json({ error: "name_required" }, { status: 400 });
+const addressZip = String(body?.addressZip ?? "").trim();
+const cityCodeIbge = String(body?.cityCodeIbge ?? "").trim();
+if (!name) return NextResponse.json({ error: "name_required" }, { status: 400 });
 
   const client = await prisma.client.create({
     data: {
@@ -72,6 +75,7 @@ addressDistrict: addressDistrict || null,
 addressCity: addressCity || null,
 addressState: addressState || null,
 addressZip: addressZip || null,
+cityCodeIbge: cityCodeIbge || null,
 isActive: true,} as any,
     select: {
   id: true,
@@ -88,6 +92,7 @@ isActive: true,} as any,
   addressCity: true,
   addressState: true,
   addressZip: true,
+  cityCodeIbge: true,
   isActive: true,
 },
   } as any);

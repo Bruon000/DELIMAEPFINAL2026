@@ -26,6 +26,7 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   if (body?.addressCity != null) data.addressCity = String(body.addressCity).trim() || null;
   if (body?.addressState != null) data.addressState = String(body.addressState).trim() || null;
   if (body?.addressZip != null) data.addressZip = String(body.addressZip).trim() || null;
+  if (body?.cityCodeIbge != null) data.cityCodeIbge = String(body.cityCodeIbge).trim() || null;
   if (body?.isActive != null) data.isActive = !!body.isActive;
 
   const client = await prisma.client.findFirst({ where: { id, companyId, deletedAt: null } } as any);
@@ -49,6 +50,7 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
       addressCity: true,
       addressState: true,
       addressZip: true,
+      cityCodeIbge: true,
       isActive: true,
     },
   } as any);

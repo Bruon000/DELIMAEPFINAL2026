@@ -23,6 +23,7 @@ type Client = {
   addressCity?: string | null;
   addressState?: string | null;
   addressZip?: string | null;
+  cityCodeIbge?: string | null;
   isActive: boolean;
 };
 
@@ -109,6 +110,7 @@ export default function ClientesPage() {
     addressCity: "",
     addressState: "",
     addressZip: "",
+    cityCodeIbge: "",
   };
 
   const [form, setForm] = React.useState<any>(emptyForm);
@@ -140,6 +142,7 @@ export default function ClientesPage() {
       patch.addressCity = "";
       patch.addressState = "";
       patch.addressZip = "";
+      patch.cityCodeIbge = "";
     }
     if (editing) setEditing({ ...(editing as any), ...patch });
     else setForm({ ...form, ...patch });
@@ -218,6 +221,7 @@ export default function ClientesPage() {
       p.addressCity = "";
       p.addressState = "";
       p.addressZip = "";
+      p.cityCodeIbge = "";
     }
     return p;
   };
@@ -329,6 +333,10 @@ export default function ClientesPage() {
 
                 <Field label="CEP" hint="Ex.: 00000-000">
                   <Input placeholder="CEP" value={current.addressZip ?? ""} onChange={(e) => setVal("addressZip", e.target.value)} />
+                </Field>
+
+                <Field label="cMun IBGE" hint="Código IBGE do município (importante para emissão fiscal)">
+                  <Input placeholder="Ex.: 2304400" value={current.cityCodeIbge ?? ""} onChange={(e) => setVal("cityCodeIbge", e.target.value)} />
                 </Field>
               </>
             ) : null}

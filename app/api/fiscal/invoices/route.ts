@@ -142,6 +142,7 @@ export async function POST(req: Request) {
           city: (order.client as { addressCity?: string | null }).addressCity ?? (order.client as { city?: string | null }).city ?? null,
           state: (order.client as { addressState?: string | null }).addressState ?? (order.client as { state?: string | null }).state ?? null,
           zip: (order.client as { addressZip?: string | null }).addressZip ?? (order.client as { zipCode?: string | null }).zipCode ?? null,
+          cityCodeIbge: (order.client as { cityCodeIbge?: string | null }).cityCodeIbge ?? null,
           raw: (order.client as { address?: string | null }).address ?? null,
         },
       }
@@ -158,6 +159,98 @@ export async function POST(req: Request) {
   const docType = (requestedDocType || suggestedDocType).toUpperCase();
   if (!allowedDocTypes.includes(docType)) {
     return NextResponse.json({ error: "invalid_docType", allowed: allowedDocTypes }, { status: 400 });
+  }
+
+  // ===== valida cliente mínimo =====
+  // NFC-e: WALKIN / consumidor final pode ser mais simples.
+  // NF-e: exigir documento + endereço + cMun IBGE.
+  const missingClient: string[] = [];
+  const isWalkin = String((client?.document ?? "")).toUpperCase() === "WALKIN";
+
+  if (docType === "NFE") {
+    if (!client) {
+      missingClient.push("client");
+    } else {
+      if (!client.name) missingClient.push("client.name");
+      if (!client.document) missingClient.push("client.document");
+      if (!client.address?.street) missingClient.push("client.address.street");
+      if (!client.address?.number) missingClient.push("client.address.number");
+      if (!client.address?.district) missingClient.push("client.address.district");
+      if (!client.address?.city) missingClient.push("client.address.city");
+      if (!client.address?.state) missingClient.push("client.address.state");
+      if (!client.address?.zip) missingClient.push("client.address.zip");
+      if (!(order.client as any)?.cityCodeIbge) missingClient.push("client.cityCodeIbge");
+    }
+  }
+
+  if (docType === "NFCE") {
+    if (!client) {
+      missingClient.push("client");
+    } else {
+      if (!client.name) missingClient.push("client.name");
+      // WALKIN pode passar sem doc/endereço; cliente normal deve ter pelo menos documento OU tratar como consumidor final
+      if (!isWalkin && !client.document) missingClient.push("client.document_or_walkin");
+    }
+  }
+
+  if (missingClient.length) {
+    return NextResponse.json(
+      {
+        error: "client_fiscal_incomplete",
+        message: "Cliente incompleto para o documento fiscal solicitado.",
+        docType,
+        missingClient,
+      },
+      { status: 409 },
+    );
+  }
+
+  // ===== valida itens / produto fiscal mínimo =====
+  const missingItems: Array<{
+    itemId: string;
+    productId: string;
+    productName: string | null;
+    missing: string[];
+  }> = [];
+
+  for (const it of order.items) {
+    const f = it.product?.fiscal ?? null;
+    const missing: string[] = [];
+
+    if (!it.product) {
+      missing.push("product");
+    } else {
+      if (!it.product.unitId) missing.push("product.unitId");
+      if (!f) {
+        missing.push("product.fiscal");
+      } else {
+        if (!f.origin) missing.push("product.fiscal.origin");
+        if (!f.ncm?.code) missing.push("product.fiscal.ncm");
+        if (!f.cfop?.code) missing.push("product.fiscal.cfop");
+        if (!f.cst?.code && !f.csosn?.code) missing.push("product.fiscal.cst_or_csosn");
+      }
+    }
+
+    if (missing.length) {
+      missingItems.push({
+        itemId: String(it.id),
+        productId: String(it.productId),
+        productName: it.product?.name ?? null,
+        missing,
+      });
+    }
+  }
+
+  if (missingItems.length) {
+    return NextResponse.json(
+      {
+        error: "product_fiscal_incomplete",
+        message: "Existem itens sem cadastro fiscal mínimo para emissão.",
+        docType,
+        missingItems,
+      },
+      { status: 409 },
+    );
   }
 
   // ===== Evita duplicar: se já existe DRAFT para o mesmo orderId+docType, retorna o existente =====
