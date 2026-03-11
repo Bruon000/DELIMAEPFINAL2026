@@ -15,7 +15,17 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const arId = String(body?.accountsReceivableId ?? "").trim();
   const note = String(body?.note ?? "").trim();
-  const paidAt = body?.paidAt ? new Date(String(body.paidAt)) : new Date();
+  const paidAtRaw = body?.paidAt ? String(body.paidAt).trim() : null;
+  let paidAt: Date;
+  if (paidAtRaw && /^\d{4}-\d{2}-\d{2}$/.test(paidAtRaw)) {
+    const [y, m, d] = paidAtRaw.split("-").map(Number);
+    paidAt = new Date(y, m - 1, d, 12, 0, 0);
+  } else if (paidAtRaw) {
+    paidAt = new Date(paidAtRaw);
+    if (Number.isNaN(paidAt.getTime())) paidAt = new Date();
+  } else {
+    paidAt = new Date();
+  }
 
   if (!arId) return NextResponse.json({ error: "accountsReceivableId_required" }, { status: 400 });
 

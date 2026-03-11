@@ -46,7 +46,14 @@ const need = base * (1 + lossBom) * (1 + lossItem);
 
   const materials = await prisma.material.findMany({
     where: { id: { in: materialIds } },
-    select: { id: true, name: true, code: true, minStock: true },
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      minStock: true,
+      currentCost: true,
+      unit: { select: { code: true } },
+    },
   });
 
   const stock = await prisma.stockItem.findMany({
@@ -57,13 +64,17 @@ const need = base * (1 + lossBom) * (1 + lossItem);
   const matMap = new Map(materials.map((m) => [m.id, m]));
   const stockMap = new Map(stock.map((s) => [s.materialId, s]));
 
+  let totalEstimatedCost = 0;
   const rows = materialIds.map((mid) => {
-    const m = matMap.get(mid);
+    const m = matMap.get(mid) as any;
     const s: any = stockMap.get(mid) ?? { quantity: 0, reserved: 0 };
     const need = required.get(mid) ?? 0;
     const qty = n(s.quantity);
     const res = n(s.reserved);
     const available = qty - res;
+    const unitCost = n(m?.currentCost ?? 0);
+    const estimatedCost = need * unitCost;
+    totalEstimatedCost += estimatedCost;
     return {
       materialId: mid,
       code: m?.code ?? null,
@@ -74,6 +85,9 @@ const need = base * (1 + lossBom) * (1 + lossItem);
       reserved: res,
       available,
       ok: available + 1e-9 >= need,
+      unitCode: m?.unit?.code ?? null,
+      currentCost: unitCost,
+      estimatedCost,
     };
   });
 
@@ -84,5 +98,5 @@ const need = base * (1 + lossBom) * (1 + lossItem);
     available: r.available,
   }));
 
-  return NextResponse.json({ rows, shortages });
+  return NextResponse.json({ rows, shortages, totalEstimatedCost });
 }

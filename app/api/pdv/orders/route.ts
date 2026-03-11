@@ -20,39 +20,73 @@ export async function GET(req: Request) {
     where: {
       companyId,
       deletedAt: null,
-      status: "DRAFT" as any,
+      status: { in: ["DRAFT", "OPEN"] } as any,
       sentToCashierAt: { not: null } as any,
     } as any,
     orderBy: [{ sentToCashierAt: "desc" }, { createdAt: "desc" }] as any,
     include: {
       client: { select: { id: true, name: true, document: true } } as any,
       items: { select: { total: true } } as any,
+      accountsReceivable: {
+        orderBy: [{ createdAt: "desc" }] as any,
+        take: 1,
+        select: { status: true } as any,
+      } as any,
     },
     take,
   } as any);
 
+  const orderIds = (rows ?? []).map((o: any) => o.id);
+
+  const latestInvoices = orderIds.length
+    ? await prisma.fiscalInvoice.findMany({
+        where: { companyId, orderId: { in: orderIds } } as any,
+        orderBy: [{ createdAt: "desc" }] as any,
+        select: { orderId: true, status: true } as any,
+        distinct: ["orderId"] as any,
+      } as any)
+    : [];
+
+  const invoiceByOrder: Record<string, string> = {};
+  for (const inv of latestInvoices as any[]) {
+    if (inv.orderId && !invoiceByOrder[inv.orderId]) {
+      invoiceByOrder[inv.orderId] = String(inv.status ?? "");
+    }
+  }
+
   const list = (rows ?? [])
-    .map((o: any) => ({
-      id: o.id,
-      number: o.number ?? null,
-      createdAt: o.createdAt,
-      sentToCashierAt: o.sentToCashierAt,
-      status: o.status,
-      client: o.client ? { id: o.client.id, name: o.client.name, document: o.client.document ?? null } : null,
-      total: (o.items ?? []).reduce((s: number, it: any) => s + n(it.total), 0),
-      requestedDocType: (o as any).requestedDocType ?? null,
-      paymentMethod: (o as any).paymentMethod ?? null,
-      cardBrand: (o as any).cardBrand ?? null,
-      installments: (o as any).installments ?? null,
-      paymentNote: (o as any).paymentNote ?? null,
-    }))
+    .map((o: any) => {
+      const ar = Array.isArray(o.accountsReceivable) ? o.accountsReceivable[0] : null;
+      return {
+        id: o.id,
+        number: o.number ?? null,
+        createdAt: o.createdAt,
+        sentToCashierAt: o.sentToCashierAt,
+        status: o.status,
+        client: o.client ? { id: o.client.id, name: o.client.name, document: o.client.document ?? null } : null,
+        total: (o.items ?? []).reduce((s: number, it: any) => s + n(it.total), 0),
+        requestedDocType: (o as any).requestedDocType ?? null,
+        paymentMethod: (o as any).paymentMethod ?? null,
+        cardBrand: (o as any).cardBrand ?? null,
+        installments: (o as any).installments ?? null,
+        paymentNote: (o as any).paymentNote ?? null,
+        arStatus: ar?.status ?? null,
+        lastInvoiceStatus: invoiceByOrder[o.id] ?? null,
+      };
+    })
     .filter((o: any) => {
-      if (!q) return true;
-      const id = String(o.id ?? "").toLowerCase();
-      const num = String(o.number ?? "").toLowerCase();
-      const cname = String(o.client?.name ?? "").toLowerCase();
-      const cdoc = String(o.client?.document ?? "").toLowerCase();
-      return id.includes(q) || num.includes(q) || cname.includes(q) || cdoc.includes(q);
+      const pm = String(o.paymentMethod ?? "").toUpperCase();
+      const isCarteira = pm === "OTHER" || pm === "TRANSFER";
+      const arPending = String(o.arStatus ?? "").toUpperCase() === "PENDING";
+      if (isCarteira && arPending) return false; // carteira com recebível criado: sai da fila, pagamento em Recebimentos
+      if (q) {
+        const id = String(o.id ?? "").toLowerCase();
+        const num = String(o.number ?? "").toLowerCase();
+        const cname = String(o.client?.name ?? "").toLowerCase();
+        const cdoc = String(o.client?.document ?? "").toLowerCase();
+        return id.includes(q) || num.includes(q) || cname.includes(q) || cdoc.includes(q);
+      }
+      return true;
     });
 
   return NextResponse.json({ orders: list });

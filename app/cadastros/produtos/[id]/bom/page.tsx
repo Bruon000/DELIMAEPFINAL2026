@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { formatQuantity } from "@/lib/format-quantity";
 
 async function recalcCost(productId: string) {
   const res = await fetch(`/api/products/${productId}/recalc-cost`, { method: "POST" });
@@ -73,16 +74,29 @@ export default function BomPage() {
   const { data: mats } = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
 
   const [materialId, setMaterialId] = React.useState("");
+  const [materialSearch, setMaterialSearch] = React.useState("");
   const [quantity, setQuantity] = React.useState(1);
   const [lossItem, setLossItem] = React.useState(0);
   const [lossGlobal, setLossGlobal] = React.useState(0);
   const [msg, setMsg] = React.useState<string | null>(null);
+
+  const allMaterials = (mats?.materials ?? []) as any[];
+  const filteredMaterials = React.useMemo(() => {
+    const q = materialSearch.trim().toLowerCase();
+    if (!q) return allMaterials;
+    return allMaterials.filter(
+      (m: any) =>
+        String(m?.name ?? "").toLowerCase().includes(q) ||
+        String(m?.code ?? "").toLowerCase().includes(q)
+    );
+  }, [allMaterials, materialSearch]);
 
   const addMut = useMutation({
     mutationFn: (p: any) => addBomItem(productId, p),
     onSuccess: async () => {
       setMsg("Item adicionado!");
       setMaterialId("");
+      setMaterialSearch("");
       setQuantity(1);
       setLossItem(0);
       await qc.invalidateQueries({ queryKey: ["bom", productId] });
@@ -168,7 +182,7 @@ export default function BomPage() {
           <div className="space-y-1">
             <div className="text-sm font-medium">Perda global (%)</div>
             <Input type="number" step="0.01" min={0} value={lossGlobal} onChange={(e) => setLossGlobal(Number(e.target.value))} />
-            <div className="text-xs text-muted-foreground">Aplica em todos os materiais (corte/sobra geral).</div>
+            <div className="text-xs text-muted-foreground">Aplica em todos os materiais (corte/sobra geral). A perda é na mesma unidade de cada material (un, kg, L, m).</div>
           </div>
           <div className="md:col-span-2 flex gap-2">
             <Button disabled={saveBomMut.isPending || lossGlobal < 0} onClick={() => saveBomMut.mutate({ lossPercent: lossGlobal })}>
@@ -185,7 +199,7 @@ export default function BomPage() {
           <div><b>Perda global:</b> {Number(lossG).toFixed(2)}%</div>
           <div><b>Custo estimado do BOM:</b> {money(computed.totalCost)}</div>
           <div className="text-xs text-muted-foreground">
-            Cálculo: consumo real = qtd × (1 + perda item) × (1 + perda global), custo = consumo real × custo atual do material.
+            Cálculo: consumo real = qtd × (1 + perda item %) × (1 + perda global %), na mesma unidade do material (un, kg, L, m). Custo = consumo real × custo atual.
           </div>
           <div className="pt-2">
             <Button variant="secondary" disabled={recalcMut.isPending} onClick={() => recalcMut.mutate()}>
@@ -199,23 +213,45 @@ export default function BomPage() {
 
       <Card>
         <CardHeader><CardTitle>Adicionar material</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <select className="border rounded p-2" value={materialId} onChange={(e) => setMaterialId(e.target.value)}>
-            <option value="">Material…</option>
-            {(mats?.materials ?? []).map((m: any) => (
-              <option key={m.id} value={m.id}>{m.code ? `${m.code} - ` : ""}{m.name}</option>
-            ))}
-          </select>
-
-          <Input type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+        <CardContent className="space-y-3">
           <div className="space-y-1">
-            <div className="text-sm font-medium">Perda item (%)</div>
-            <Input type="number" step="0.01" min={0} value={lossItem} onChange={(e) => setLossItem(Number(e.target.value))} placeholder="0" />
+            <div className="text-sm font-medium">Buscar material (nome ou código)</div>
+            <Input
+              placeholder="Digite para filtrar..."
+              value={materialSearch}
+              onChange={(e) => setMaterialSearch(e.target.value)}
+              className="max-w-sm"
+            />
           </div>
-
-          <Button disabled={!materialId || quantity <= 0 || addMut.isPending} onClick={() => addMut.mutate({ materialId, quantity, lossPercent: lossItem })}>
-            {addMut.isPending ? "Adicionando..." : "Adicionar"}
-          </Button>
+          <div className="grid gap-3 md:grid-cols-4 items-end">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Material</div>
+              <select
+                className="border rounded p-2 w-full"
+                value={materialId}
+                onChange={(e) => setMaterialId(e.target.value)}
+              >
+                <option value="">Selecione…</option>
+                {filteredMaterials.map((m: any) => (
+                  <option key={m.id} value={m.id}>
+                    {m.code ? `${m.code} - ` : ""}{m.name} — {m.unit?.code ?? "un"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Qtd</div>
+              <Input type="number" min={0.0001} step="0.25" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Perda item (%)</div>
+              <Input type="number" step="0.01" min={0} value={lossItem} onChange={(e) => setLossItem(Number(e.target.value))} placeholder="0" />
+              <div className="text-xs text-muted-foreground">Perda na unidade do material (un, kg, L, m).</div>
+            </div>
+            <Button disabled={!materialId || quantity <= 0 || addMut.isPending} onClick={() => addMut.mutate({ materialId, quantity, lossPercent: lossItem })}>
+              {addMut.isPending ? "Adicionando..." : "Adicionar"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -223,24 +259,28 @@ export default function BomPage() {
         <CardHeader><CardTitle>Itens do BOM</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {items.length === 0 && <p className="text-muted-foreground">Sem itens ainda.</p>}
-          {computed.rows.map((it: any) => (
-            <div key={it.id} className="flex items-center justify-between border rounded p-3">
-              <div>
-                <div className="font-medium">
-                  {it.material?.code ? `${it.material.code} - ` : ""}{it.material?.name ?? it.materialId}
+          {computed.rows.map((it: any) => {
+            const u = it._unit ? String(it._unit) : "un";
+            return (
+              <div key={it.id} className="flex items-center justify-between border rounded p-3">
+                <div>
+                  <div className="font-medium">
+                    {it.material?.code ? `${it.material.code} - ` : ""}{it.material?.name ?? it.materialId}
+                    <span className="text-muted-foreground font-normal ml-1">({u})</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Qtd/base: {formatQuantity(it._qty, u)} <strong>{u}</strong> · Perda item: {it._lossI.toFixed(2)}% · Consumo real: {formatQuantity(it._need, u)} <strong>{u}</strong>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Custo atual: {money(it._cost)} · Custo do item: {money(it._lineCost)}
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Qtd/base: {it._qty.toFixed(4)} {it._unit ? it._unit : ""} · Perda item: {it._lossI.toFixed(2)}% · Consumo real: {it._need.toFixed(4)} {it._unit ? it._unit : ""}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Custo atual: {money(it._cost)} · Custo do item: {money(it._lineCost)}
-                </div>
+                <Button variant="destructive" size="sm" onClick={() => delMut.mutate(it.id)} disabled={delMut.isPending}>
+                  Remover
+                </Button>
               </div>
-              <Button variant="destructive" size="sm" onClick={() => delMut.mutate(it.id)} disabled={delMut.isPending}>
-                Remover
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     </div>

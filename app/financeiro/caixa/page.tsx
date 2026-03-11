@@ -92,6 +92,20 @@ async function closeCashConfirmed(closingBalance: number) {
   return data;
 }
 
+async function fetchClosedSessions() {
+  const res = await fetch("/api/cash/sessions?closed=true");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar sessões fechadas");
+  return data as { sessions: any[] };
+}
+
+async function fetchSessionDetail(id: string) {
+  const res = await fetch(`/api/cash/sessions/${id}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error ?? "Sessão não encontrada");
+  return data as { session: any; transactions: any[] };
+}
+
 async function postTransaction(payload: { type: "IN" | "OUT"; amount: number; description?: string; reference?: string }) {
   const res = await fetch("/api/cash/transactions", {
     method: "POST",
@@ -113,11 +127,27 @@ export default function CaixaPage() {
   const [txType, setTxType] = React.useState<"ALL" | "IN" | "OUT">("ALL");
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
+  const [closedSessionsOpen, setClosedSessionsOpen] = React.useState(false);
+  const [detailSessionId, setDetailSessionId] = React.useState<string | null>(null);
 
   const txQ = useQuery({
     queryKey: ["cash-transactions", { q, txType, from, to }],
     queryFn: () => fetchTransactions({ q: q.trim() || undefined, type: txType, from: from || undefined, to: to || undefined }),
   });
+
+  const closedSessionsQ = useQuery({
+    queryKey: ["cash-sessions-closed"],
+    queryFn: fetchClosedSessions,
+    enabled: closedSessionsOpen,
+  });
+  const closedSessions = closedSessionsQ.data?.sessions ?? [];
+
+  const sessionDetailQ = useQuery({
+    queryKey: ["cash-session-detail", detailSessionId],
+    queryFn: () => fetchSessionDetail(detailSessionId!),
+    enabled: !!detailSessionId,
+  });
+  const sessionDetail = sessionDetailQ.data;
 
   const txs = txQ.data?.transactions ?? [];
 
@@ -159,6 +189,7 @@ export default function CaixaPage() {
       toast.success("Caixa fechado.");
       await qc.invalidateQueries({ queryKey: ["cash-session"] });
       await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
+      await qc.invalidateQueries({ queryKey: ["cash-sessions-closed"] });
     },
     onError: (e: any) => {
       const msg = e?.message ?? "Erro";
@@ -176,6 +207,7 @@ export default function CaixaPage() {
       setCloseMismatch(null);
       await qc.invalidateQueries({ queryKey: ["cash-session"] });
       await qc.invalidateQueries({ queryKey: ["cash-transactions"] });
+      await qc.invalidateQueries({ queryKey: ["cash-sessions-closed"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao fechar"),
   });
@@ -309,8 +341,8 @@ export default function CaixaPage() {
   return (
     <div className="p-6 space-y-4">
       <PageHeader
-        title="Caixa"
-        subtitle="Abertura/fechamento e lançamentos manuais."
+        title="Abrir / Fechar Caixa"
+        subtitle="Aqui você abre o caixa no início do dia e fecha no fim. Os recebimentos feitos no PDV ou em Recebimentos entram automaticamente na sessão aberta."
         actions={
           <div className="flex gap-2">
             <Button
@@ -442,6 +474,56 @@ export default function CaixaPage() {
             }
           />
         </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Histórico de sessões fechadas</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setClosedSessionsOpen((v) => !v)}>
+            {closedSessionsOpen ? "Ocultar" : "Ver sessões fechadas"}
+          </Button>
+        </CardHeader>
+        {closedSessionsOpen && (
+          <CardContent className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Ao fechar o caixa, o saldo de abertura, totais de entradas/saídas e saldo informado no fechamento ficam salvos aqui.
+            </p>
+            {closedSessionsQ.isLoading && <p className="text-sm">Carregando...</p>}
+            {!closedSessionsQ.isLoading && closedSessions.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhuma sessão fechada ainda.</p>
+            )}
+            {!closedSessionsQ.isLoading && closedSessions.length > 0 && (
+              <div className="rounded-md border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-2">Abertura</th>
+                      <th className="text-left p-2">Fechamento</th>
+                      <th className="text-left p-2">Operador</th>
+                      <th className="text-right p-2">Saldo abertura</th>
+                      <th className="text-right p-2">Saldo fechamento</th>
+                      <th className="p-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {closedSessions.map((s: any) => (
+                      <tr key={s.id} className="border-t">
+                        <td className="p-2 tabular-nums">{new Date(s.openedAt).toLocaleString("pt-BR")}</td>
+                        <td className="p-2 tabular-nums">{s.closedAt ? new Date(s.closedAt).toLocaleString("pt-BR") : "—"}</td>
+                        <td className="p-2">{s.userName}</td>
+                        <td className="p-2 text-right tabular-nums">R$ {Number(s.openingBalance ?? 0).toFixed(2)}</td>
+                        <td className="p-2 text-right tabular-nums">R$ {Number(s.closingBalance ?? 0).toFixed(2)}</td>
+                        <td className="p-2">
+                          <Button variant="ghost" size="sm" onClick={() => setDetailSessionId(s.id)}>Ver detalhes</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       <Dialog open={txOpen} onOpenChange={setTxOpen}>
@@ -613,6 +695,57 @@ export default function CaixaPage() {
               {recvMut.isPending ? "Recebendo..." : "Confirmar recebimento"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!detailSessionId} onOpenChange={(open) => !open && setDetailSessionId(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalhe da sessão fechada</DialogTitle>
+            <DialogDescription>
+              Resumo e transações desta sessão de caixa.
+            </DialogDescription>
+          </DialogHeader>
+          {sessionDetailQ.isLoading && <p className="text-sm">Carregando...</p>}
+          {sessionDetail && !sessionDetailQ.isLoading && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><b>Abertura:</b> {new Date(sessionDetail.session.openedAt).toLocaleString("pt-BR")}</div>
+                <div><b>Fechamento:</b> {sessionDetail.session.closedAt ? new Date(sessionDetail.session.closedAt).toLocaleString("pt-BR") : "—"}</div>
+                <div><b>Operador:</b> {sessionDetail.session.userName}</div>
+                <div><b>Saldo abertura:</b> R$ {Number(sessionDetail.session.openingBalance ?? 0).toFixed(2)}</div>
+                <div><b>Total entradas (IN):</b> R$ {Number(sessionDetail.session.sumIn ?? 0).toFixed(2)}</div>
+                <div><b>Total saídas (OUT):</b> R$ {Number(sessionDetail.session.sumOut ?? 0).toFixed(2)}</div>
+                <div><b>Saldo esperado:</b> R$ {Number(sessionDetail.session.expectedBalance ?? 0).toFixed(2)}</div>
+                <div><b>Saldo informado no fechamento:</b> R$ {Number(sessionDetail.session.closingBalance ?? 0).toFixed(2)}</div>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Transações</h4>
+                <div className="rounded-md border max-h-[280px] overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2">Data</th>
+                        <th className="text-left p-2">Tipo</th>
+                        <th className="text-right p-2">Valor</th>
+                        <th className="text-left p-2">Descrição / Ref</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(sessionDetail.transactions ?? []).map((t: any) => (
+                        <tr key={t.id} className="border-t">
+                          <td className="p-2 tabular-nums">{new Date(t.createdAt).toLocaleString("pt-BR")}</td>
+                          <td className="p-2">{t.type}</td>
+                          <td className="p-2 text-right tabular-nums">R$ {Number(t.amount ?? 0).toFixed(2)}</td>
+                          <td className="p-2">{t.description ?? t.reference ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

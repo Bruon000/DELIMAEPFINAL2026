@@ -12,6 +12,7 @@ export async function GET() {
     orderBy: { name: "asc" },
     include: {
       unit: { select: { id: true, code: true, name: true } },
+      stockItem: { select: { quantity: true, reserved: true } },
     },
     take: 500,
   } as any);

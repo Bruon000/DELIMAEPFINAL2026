@@ -21,6 +21,8 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const paymentMethod = s(body?.paymentMethod)?.toUpperCase() ?? null;
   const cardBrand = s(body?.cardBrand)?.toUpperCase() ?? null;
   const installments = body?.installments != null ? Number(body.installments) : null;
+  const dueDays = body?.dueDays != null ? Number(body.dueDays) : null;
+  const intervalDays = body?.intervalDays != null ? Number(body.intervalDays) : null;
   const paymentNote = s(body?.paymentNote);
 
   if (!requestedDocType || !["NFCE", "NFE"].includes(requestedDocType)) {
@@ -70,6 +72,8 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
       paymentMethod: paymentMethod || null,
       cardBrand: cardBrand || null,
       installments: Number.isFinite(installments) ? installments : null,
+      dueDays: dueDays != null && Number.isFinite(dueDays) && dueDays >= 0 ? dueDays : null,
+      intervalDays: intervalDays != null && Number.isFinite(intervalDays) && intervalDays > 0 ? Math.min(365, Math.trunc(intervalDays)) : null,
       paymentNote: paymentNote || null,
     } as any,
     select: {
@@ -80,6 +84,8 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
       paymentMethod: true,
       cardBrand: true,
       installments: true,
+      dueDays: true,
+      intervalDays: true,
       paymentNote: true,
     } as any,
   } as any);

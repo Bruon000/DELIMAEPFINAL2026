@@ -102,6 +102,12 @@ $12026-03-04 10:46:34
 
 - [x] Bootstrap demo cria materiais + estoque inicial + produtos + cliente + fornecedor + pedido + PO (scripts/bootstrap-demo.js)
 
+### Recebimentos, PDV e Caixa (como está funcionando)
+- [x] **GET /api/orders** — correção Prisma: `items` usa só `select` (com `product` dentro), sem `include`.
+- [x] **Recebimentos:** coluna "Pago em" (data do pagamento quando status = PAID); após registrar recebimento o filtro muda para "Pagos" e a lista ordena por `paidAt` desc; texto na página explicando que o valor cai na mesma sessão de caixa do PDV (movimentos em Abrir/Fechar Caixa).
+- [x] **Caixa:** `GET /api/cash/sessions?closed=true` lista sessões fechadas; `GET /api/cash/sessions/[id]` retorna detalhe (sessão + transações + totais). Na tela Abrir/Fechar Caixa: bloco "Histórico de sessões fechadas" (botão "Ver sessões fechadas") com tabela e "Ver detalhes" abrindo modal com resumo e transações.
+- **Doc:** `docs/COMO_FUNCIONA_CAIXA_RECEBIMENTOS.md` — passo a passo de Recebimentos, PDV, abertura/fechamento de caixa e histórico de sessões fechadas.
+
 ### Auditoria
 - [x] lib/audit.ts (writeAuditLog) não derruba operação
 - [x] GET /api/audit-logs?entity=...&entityId=... (consulta trilha)
@@ -285,6 +291,13 @@ Use este arquivo para marcar o progresso do projeto. Troque `[ ]` por `[x]` quan
 
 - [x] Configurações fiscais (FiscalConfig) base (schema)
 - [x] Nota fiscal (FiscalInvoice) base (schema)
+- [x] Fiscal/Config: teste técnico de homologação com validação de emitente, config, pedido pago, cliente e itens fiscais
+- [x] Fiscal/Provider: teste externo da Nuvem Fiscal com sync de empresa, certificado, configuração NF-e/NFC-e e status da SEFAZ
+- [x] Fiscal/Provider: consult() real da NF-e via Nuvem Fiscal com sync de status, chave e protocolo
+- [x] Fiscal/Provider: download e persistência de XML processado e PDF da NF-e autorizada
+- [x] Fiscal/Provider: cancelamento real da NF-e via Nuvem Fiscal com justificativa e persistência local
+- [x] Fiscal/NFC-e: builder de infNFe/infNFeSupl e desbloqueio da emissão técnica via provider
+- [x] Fiscal/NFC-e: consulta, download de XML/PDF e cancelamento via provider reaproveitando a infraestrutura da NF-e
 - [ ] Tabelas stub: CFOP / CST / NCM (seeds simples)
 - [ ] Endpoints stub: emitir/consultar/cancelar (501)
 - [ ] Webhook stub fiscal (logar payload)

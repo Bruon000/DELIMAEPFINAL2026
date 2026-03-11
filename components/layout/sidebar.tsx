@@ -16,6 +16,7 @@ import {
   Settings,
   Boxes,
   ReceiptText,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ const mainNav: NavItem[] = [
     children: [
       { title: "Pedidos de Compra", href: "/compras/pedidos" },
       { title: "Importar NF-e (XML)", href: "/compras/importar-nfe" },
+      { title: "Como usar (Compras e Estoque)", href: "/ajuda/compras-estoque" },
     ],
   },
 
@@ -70,7 +72,9 @@ const mainNav: NavItem[] = [
     icon: Package,
     children: [
       { title: "Materiais", href: "/estoque/materiais" },
+      { title: "Movimentações", href: "/estoque/movimentacoes" },
       { title: "Crítico", href: "/estoque/critico" },
+      { title: "Como usar (Compras e Estoque)", href: "/ajuda/compras-estoque" },
     ],
   },
 
@@ -79,9 +83,9 @@ const mainNav: NavItem[] = [
     href: "/financeiro",
     icon: Wallet,
     children: [
-      { title: "PDV (Caixa)", href: "/financeiro/pdv" },
-      { title: "Contas a Receber", href: "/financeiro/contas-receber" },
-      { title: "Caixa", href: "/financeiro/caixa" },
+      { title: "PDV", href: "/financeiro/pdv" },
+      { title: "Recebimentos", href: "/financeiro/recebimentos" },
+      { title: "Abrir/Fechar Caixa", href: "/financeiro/caixa" },
       { title: "Contas a Pagar", href: "/financeiro/contas-pagar" },
     ],
   },
@@ -116,6 +120,17 @@ const bottomNav: NavItem[] = [
     children: [
       { title: "Preços", href: "/configuracoes/precos" },
       { title: "Fiscal", href: "/configuracoes/fiscal" },
+      { title: "Empresa", href: "/configuracoes/empresa" },
+    ],
+  },
+  {
+    title: "Admin",
+    href: "/admin/users",
+    icon: Users,
+    children: [
+      { title: "Usuários", href: "/admin/users" },
+      { title: "Vendedores", href: "/admin/vendedores" },
+      { title: "Descontos", href: "/admin/descontos" },
     ],
   },
 ];
@@ -273,6 +288,7 @@ export function Sidebar() {
               .filter((it) => {
                 if (it.title === "Cadastros") return role === "ADMIN";
                 if (it.title === "Configurações") return role === "ADMIN";
+                if (it.title === "Admin") return role === "ADMIN";
                 return true;
               })
               .map(renderItem)}

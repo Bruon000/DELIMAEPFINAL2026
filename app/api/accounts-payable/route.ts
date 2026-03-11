@@ -2,13 +2,37 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+function toDateOrNull(v: string | null): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function GET(req: Request) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const companyId = session.user.companyId as string;
+  const url = new URL(req.url);
+  const from = toDateOrNull(url.searchParams.get("from"));
+  const to = toDateOrNull(url.searchParams.get("to"));
+  const statusParam = String(url.searchParams.get("status") ?? "").toUpperCase();
+
+  const where: any = { companyId };
+  if (from || to) {
+    where.dueDate = {};
+    if (from) where.dueDate.gte = from;
+    if (to) where.dueDate.lte = to;
+  }
+  if (statusParam === "OVERDUE") {
+    where.status = "PENDING";
+    where.dueDate = { ...(where.dueDate || {}), lt: new Date() };
+  } else if (statusParam && ["PENDING", "PAID", "CANCELED"].includes(statusParam)) {
+    where.status = statusParam;
+  }
+
   const items = await prisma.accountsPayable.findMany({
-    where: { companyId } as any,
+    where,
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }] as any,
     take: 300,
   } as any);

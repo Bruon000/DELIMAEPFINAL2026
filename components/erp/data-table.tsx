@@ -20,6 +20,7 @@ export function DataTable<T>({
   columns,
   rowKey,
   onRowClick,
+  selectedKey,
   emptyTitle = "Sem registros",
   emptyHint,
   className,
@@ -28,6 +29,7 @@ export function DataTable<T>({
   columns: Column<T>[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  selectedKey?: string | null;
   emptyTitle?: string;
   emptyHint?: string;
   className?: string;
@@ -62,12 +64,15 @@ export function DataTable<T>({
             ) : (
               rows.map((r) => {
                 const clickable = Boolean(onRowClick);
+                const key = rowKey(r);
+                const selected = selectedKey != null && key === selectedKey;
                 return (
                   <tr
-                    key={rowKey(r)}
+                    key={key}
                     className={cx(
-                      "border-b last:border-b-0",
-                      clickable && "cursor-pointer hover:bg-muted/40"
+                      "border-b last:border-b-0 transition-colors",
+                      clickable && "cursor-pointer hover:bg-muted/40",
+                      selected && "bg-blue-50 hover:bg-blue-50/80",
                     )}
                     onClick={clickable ? () => onRowClick?.(r) : undefined}
                   >

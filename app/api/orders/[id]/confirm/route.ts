@@ -82,9 +82,10 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const items = (order as any).items;
   if (!items?.length) return NextResponse.json({ error: "order_has_no_items" }, { status: 400 });
 
-  // se já confirmado, não faz de novo
-  if (String(order.status) !== "DRAFT") {
-    return NextResponse.json({ error: "order_not_draft", status: order.status }, { status: 400 });
+  // só confirma pedidos DRAFT ou OPEN (enviados ao caixa)
+  const canConfirmStatus = ["DRAFT", "OPEN"].includes(String(order.status));
+  if (!canConfirmStatus) {
+    return NextResponse.json({ error: "order_already_confirmed", status: order.status }, { status: 400 });
   }
 
   // calcular materiais necessários via BOM
@@ -137,7 +138,7 @@ const need = base * (1 + lossBom) * (1 + lossItem);
     // 1) confirmar pedido
     await tx.order.update({
       where: { id: orderId } as any,
-      data: { status: "CONFIRMED" as any, confirmedAt: new Date() } as any,
+      data: { status: "CONFIRMED" as any, confirmedAt: new Date(), confirmedById: userId } as any,
     });
 
     // 2) reservar estoque + ledger RESERVED

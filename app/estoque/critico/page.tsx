@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -9,6 +10,7 @@ import { FiltersBar as FiltersShell } from "@/components/erp/filters-shell";
 import { DataTable, type Column } from "@/components/erp/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Package, TrendingDown, ShoppingCart } from "lucide-react";
 
 type Row = {
   materialId: string;
@@ -17,31 +19,48 @@ type Row = {
   reserved: number;
   available: number;
   critical: boolean;
+  deficitQty?: number;
+  deficitValue?: number;
+  unit?: { id: string; code: string | null; name: string } | null;
   material?: { id: string; name: string; code: string | null } | null;
 };
 
+type Summary = { totalCritical: number; totalDeficitQty: number; totalDeficitValue: number };
+
 function n(x: any) { return Number(x ?? 0); }
 
-async function fetchCritical(q: string, mode: "available" | "total") {
+async function fetchCritical(params: { q: string; mode: "available" | "total"; unitId: string }) {
   const sp = new URLSearchParams();
-  if (q.trim()) sp.set("q", q.trim());
-  sp.set("mode", mode);
+  if (params.q.trim()) sp.set("q", params.q.trim());
+  sp.set("mode", params.mode);
+  if (params.unitId) sp.set("unitId", params.unitId);
   sp.set("take", "300");
 
   const res = await fetch(`/api/stock/critical?${sp.toString()}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao carregar estoque crítico");
-  return data as { ok: boolean; rows: Row[] };
+  return data as { ok: boolean; rows: Row[]; summary: Summary };
+}
+
+async function fetchUnits() {
+  const res = await fetch("/api/units");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { units: [] as { id: string; name: string; code: string | null }[] };
+  return data as { units: { id: string; name: string; code: string | null }[] };
 }
 
 export default function EstoqueCriticoPage() {
   const [q, setQ] = React.useState("");
   const [mode, setMode] = React.useState<"available" | "total">("available");
+  const [unitId, setUnitId] = React.useState("");
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["stock-critical", q, mode],
-    queryFn: () => fetchCritical(q, mode),
+    queryKey: ["stock-critical", q, mode, unitId],
+    queryFn: () => fetchCritical({ q, mode, unitId }),
   });
+
+  const { data: unitsData } = useQuery({ queryKey: ["units"], queryFn: fetchUnits });
+  const units = unitsData?.units ?? [];
 
   React.useEffect(() => {
     if (error) {
@@ -52,6 +71,7 @@ export default function EstoqueCriticoPage() {
   }, [error]);
 
   const rows = data?.rows ?? [];
+  const summary = data?.summary ?? { totalCritical: 0, totalDeficitQty: 0, totalDeficitValue: 0 };
 
   const columns: Column<Row>[] = [
     {
@@ -95,19 +115,78 @@ export default function EstoqueCriticoPage() {
       className: "text-right tabular-nums",
       cell: (r) => n(r.reserved).toLocaleString("pt-BR"),
     },
+    {
+      key: "unit",
+      header: "Unidade",
+      headerClassName: "w-[100px]",
+      cell: (r) => r.unit?.name ?? "—",
+    },
+    {
+      key: "solicitar",
+      header: "",
+      headerClassName: "w-[140px]",
+      cell: () => (
+        <Link href="/compras/pedidos">
+          <Button variant="outline" size="sm">Solicitar compra</Button>
+        </Link>
+      ),
+    },
   ];
 
   return (
     <div className="p-6 space-y-4">
       <PageHeader
         title="Estoque crítico"
-        subtitle="Materiais abaixo do mínimo (minStock)."
+        subtitle="Materiais abaixo do mínimo (minStock). Use Solicitar compra para abrir um pedido de compra."
         actions={
-          <Button variant="secondary" onClick={() => refetch()}>
-            {isFetching ? "Atualizando..." : "Recarregar"}
-          </Button>
+          <div className="flex gap-2">
+            <Link href="/compras/pedidos">
+              <Button>
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Solicitar compra
+              </Button>
+            </Link>
+            <Button variant="secondary" onClick={() => refetch()}>
+              {isFetching ? "Atualizando..." : "Recarregar"}
+            </Button>
+          </div>
         }
       />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Itens críticos</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summary.totalCritical}</div>
+            <p className="text-xs text-muted-foreground">materiais abaixo do mínimo</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Quantidade em falta</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summary.totalDeficitQty.toLocaleString("pt-BR")}</div>
+            <p className="text-xs text-muted-foreground">soma (mín. − disponível)</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Valor estimado em falta</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {Number(summary.totalDeficitValue).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            </div>
+            <p className="text-xs text-muted-foreground">custo atual × quantidade em falta</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -117,9 +196,9 @@ export default function EstoqueCriticoPage() {
           <FiltersShell
             search={q}
             onSearchChange={setQ}
-            onClearAll={() => setQ("")}
+            onClearAll={() => { setQ(""); setUnitId(""); }}
             leftSlot={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   className="h-10 rounded-md border bg-background px-3 text-sm"
                   value={mode}
@@ -128,8 +207,18 @@ export default function EstoqueCriticoPage() {
                   <option value="available">Criticidade por disponível</option>
                   <option value="total">Criticidade por saldo total</option>
                 </select>
+                <select
+                  className="h-10 rounded-md border bg-background px-3 text-sm min-w-[160px]"
+                  value={unitId}
+                  onChange={(e) => setUnitId(e.target.value)}
+                >
+                  <option value="">Todas as unidades</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
                 <div className="text-xs text-muted-foreground">
-                  {isLoading ? "Carregando..." : `Itens críticos: ${rows.length}`}
+                  {isLoading ? "Carregando..." : `${rows.length} itens críticos`}
                 </div>
               </div>
             }

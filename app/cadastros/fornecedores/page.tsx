@@ -29,6 +29,21 @@ function onlyDigits(s: string) {
   return (s ?? "").replace(/\D/g, "");
 }
 
+function formatCep(v: string) {
+  const d = onlyDigits(v).slice(0, 8);
+  if (d.length <= 5) return d.replace(/(\d{5})/, "$1-");
+  return d.replace(/(\d{5})(\d{0,3})/, "$1-$2");
+}
+
+async function lookupCep(cep: string) {
+  const q = onlyDigits(cep);
+  if (q.length !== 8) return null;
+  const res = await fetch(`/api/br/cep?q=${q}`);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.data) return null;
+  return json.data as { logradouro?: string; bairro?: string; localidade?: string; uf?: string };
+}
+
 
 function validateCnpj(cnpj: string) {
   const s = onlyDigits(cnpj);
@@ -141,8 +156,35 @@ export default function FornecedoresPage() {
 
   const [editing, setEditing] = React.useState<Supplier | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
+  const [cepLoading, setCepLoading] = React.useState(false);
 
   const current = (editing as any) ?? form;
+
+  const handleBlurCep = React.useCallback(async () => {
+    const cep = onlyDigits(current?.addressZip ?? "");
+    if (cep.length !== 8) return;
+    setCepLoading(true);
+    setMsg(null);
+    try {
+      const d = await lookupCep(cep);
+      if (d) {
+        const patch = {
+          addressZip: formatCep(cep),
+          addressStreet: d.logradouro ?? current?.addressStreet ?? "",
+          addressDistrict: d.bairro ?? current?.addressDistrict ?? "",
+          addressCity: d.localidade ?? current?.addressCity ?? "",
+          addressState: (d.uf ?? current?.addressState ?? "").toUpperCase(),
+        };
+        if (editing) setEditing((prev: any) => ({ ...prev, ...patch }));
+        else setForm((prev: any) => ({ ...prev, ...patch }));
+        setMsg("Endereço preenchido pelo CEP.");
+      }
+    } catch {
+      setMsg("CEP não encontrado.");
+    } finally {
+      setCepLoading(false);
+    }
+  }, [current?.addressZip, current?.addressStreet, current?.addressDistrict, current?.addressCity, current?.addressState, editing]);
 
   const createMut = useMutation({
     mutationFn: createSupplier,
@@ -299,8 +341,15 @@ export default function FornecedoresPage() {
               <Input placeholder="UF" value={current.addressState ?? ""} onChange={(e) => setVal("addressState", e.target.value)} />
             </Field>
 
-            <Field label="CEP" hint="Ex.: 00000-000">
-              <Input placeholder="CEP" value={current.addressZip ?? ""} onChange={(e) => setVal("addressZip", e.target.value)} />
+            <Field label="CEP" hint="Digite e saia do campo para buscar endereço automaticamente">
+              <Input
+                placeholder="00000-000"
+                value={current.addressZip ?? ""}
+                onChange={(e) => setVal("addressZip", formatCep(e.target.value))}
+                onBlur={handleBlurCep}
+                disabled={cepLoading}
+              />
+              {cepLoading && <span className="text-xs text-muted-foreground">Buscando...</span>}
             </Field>
           </div>
 

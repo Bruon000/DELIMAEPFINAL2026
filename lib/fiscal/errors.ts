@@ -19,5 +19,8 @@ export function createNotConfiguredProvider(providerName: string) {
     async consult() {
       return err();
     },
+    async download() {
+      return err();
+    },
   };
 }

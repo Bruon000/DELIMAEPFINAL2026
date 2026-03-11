@@ -269,7 +269,7 @@ function EstoqueMovimentacoesContent() {
     },
     {
       key: "ref",
-      header: "Referência / Nota",
+      header: "Referência",
       cell: (r) => (
         <div className="min-w-[320px]">
           <div className="text-sm">{r.reference ?? "-"}</div>
@@ -361,29 +361,43 @@ function EstoqueMovimentacoesContent() {
     },
   ];
 
+  const backToPoId = React.useMemo(() => {
+    if (!activeRef || !String(activeRef).startsWith("PO:")) return null;
+    return String(activeRef).slice(3);
+  }, [activeRef]);
+
   return (
     <div className="p-6 space-y-4">
       <PageHeader
         title="Movimentações de Estoque"
-        subtitle="Razão de estoque com filtros, busca e ações rápidas (saída e ajuste)."
+        subtitle={
+          activeRef
+            ? `Movimentações da referência: ${activeRef}. Use o botão abaixo para voltar ao pedido ou ver todas as compras.`
+            : "Aqui aparecem entradas (compras recebidas, importação NF-e), saídas (vendas, produção, perdas) e ajustes. Use os filtros para ver um pedido específico ou um período."
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {activeRef || materialId ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/ajuda/compras-estoque">Como usar</Link>
+            </Button>
+            {activeRef ? (
               <>
-                {activeRef ? (
-                  <span className="text-xs text-muted-foreground">
-                    Ref ativa: <span className="font-mono">{activeRef}</span>
-                  </span>
-                ) : null}
-                {materialId ? (
-                  <span className="text-xs text-muted-foreground">
-                    Material ativo: <span className="font-mono">{materialId}</span>
-                  </span>
-                ) : null}
-                <Button variant="outline" onClick={clearRefParam}>
-                  Voltar geral
+                <Button asChild variant="default" size="sm">
+                  {backToPoId ? (
+                    <Link href={`/compras/pedidos/${backToPoId}`}>← Voltar ao pedido de compra</Link>
+                  ) : (
+                    <Link href="/compras/pedidos">Ver compras</Link>
+                  )}
+                </Button>
+                <Button variant="outline" size="sm" onClick={clearRefParam}>
+                  Limpar filtro e ver todas
                 </Button>
               </>
+            ) : null}
+            {materialId && !activeRef ? (
+              <Button variant="outline" size="sm" onClick={clearRefParam}>
+                Limpar filtros
+              </Button>
             ) : null}
             <div className="flex gap-2">
             <Button
@@ -419,11 +433,15 @@ function EstoqueMovimentacoesContent() {
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Referência = número do pedido (PO:…) ou chave da NF-e (NFE:…). Você pode colar a ref que aparece em Compras → Ledger ou Copiar ref.
+          </p>
         </CardHeader>
         <CardContent className="space-y-3">
           <FiltersShell
             search={q}
             onSearchChange={setQ}
+            placeholder="Referência (ex.: PO:xxx ou NFE:chave)"
             onClearAll={() => {
               setQ("");
               setType("ALL");
@@ -438,15 +456,15 @@ function EstoqueMovimentacoesContent() {
                   value={type}
                   onChange={(e) => setType(e.target.value)}
                 >
-                  <option value="ALL">Todos</option>
-                  <option value="RECEIVED">RECEIVED</option>
-                  <option value="ISSUED">ISSUED</option>
-                  <option value="ADJUSTMENT">ADJUSTMENT</option>
+                  <option value="ALL">Todos os tipos</option>
+                  <option value="RECEIVED">Entrada (RECEIVED)</option>
+                  <option value="ISSUED">Saída (ISSUED)</option>
+                  <option value="ADJUSTMENT">Ajuste (ADJUSTMENT)</option>
                 </select>
 
                 <Input
-                  className="h-10 w-[320px]"
-                  placeholder="Filtrar por materialId (opcional)"
+                  className="h-10 w-[200px]"
+                  placeholder="ID do material (opcional)"
                   value={materialId}
                   onChange={(e) => setMaterialId(e.target.value)}
                 />
@@ -476,8 +494,14 @@ function EstoqueMovimentacoesContent() {
         rows={rows}
         columns={columns}
         rowKey={(r) => r.id}
-        emptyTitle={ledgerQ.isLoading ? "Carregando..." : "Sem movimentações"}
-        emptyHint={ledgerQ.isLoading ? "Buscando dados…" : "Ajuste filtros ou faça uma movimentação (entrada/saída/ajuste)."}
+        emptyTitle={ledgerQ.isLoading ? "Carregando..." : "Nenhuma movimentação"}
+        emptyHint={
+          ledgerQ.isLoading
+            ? "Buscando dados…"
+            : activeRef
+              ? "Ainda não há lançamentos para esta referência. Use o botão «Voltar ao pedido de compra» no topo para retornar ou «Limpar filtro» para ver todas as movimentações."
+              : "Não há lançamentos com os filtros atuais. Entradas aparecem quando você recebe um pedido de compra (Compras → Abrir pedido → Receber)."
+        }
       />
 
       <div className="flex justify-center">

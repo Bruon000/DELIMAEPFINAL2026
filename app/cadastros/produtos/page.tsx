@@ -114,10 +114,21 @@ async function fetchProductFiscal(productId: string) {
   const res = await fetch(`/api/products/${productId}/fiscal`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao carregar fiscal do produto");
-  return data as { product: { id: string; name: string; code?: string | null }; fiscal: unknown | null };
+  return data as {
+    product: { id: string; name: string; code?: string | null };
+    fiscal: any | null;
+  };
 }
 
-async function saveProductFiscal(productId: string, payload: { origin: number; ncmId: string | null; cestId: string | null; cfopId: string | null; cstId: string | null; csosnId: string | null; taxProfileId: string | null }) {
+async function saveProductFiscal(productId: string, payload: {
+  origin: number;
+  ncmId?: string | null;
+  cestId?: string | null;
+  cfopId?: string | null;
+  cstId?: string | null;
+  csosnId?: string | null;
+  taxProfileId?: string | null;
+}) {
   const res = await fetch(`/api/products/${productId}/fiscal`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -125,7 +136,7 @@ async function saveProductFiscal(productId: string, payload: { origin: number; n
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message ?? data?.error ?? "Erro ao salvar fiscal do produto");
-  return data as { ok: boolean; fiscal: unknown };
+  return data;
 }
 
 async function searchFiscal(kind: "ncm" | "cfop" | "cst" | "csosn", q: string) {
@@ -160,7 +171,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 export default function ProdutosPage() {
   const autoLoadedRef = React.useRef<Record<string, boolean>>({});
-  const markDirty = (id: string) => setPricingDirty((prev) => ({ ...prev, [id]: true }));
+  const _markDirty = (id: string) => setPricingDirty((prev) => ({ ...prev, [id]: true }));
   const qc = useQueryClient();
   const { data: productsRaw, isLoading } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
   const products = React.useMemo(() => {
@@ -219,12 +230,12 @@ export default function ProdutosPage() {
   const [form, setForm] = React.useState({ name: "", code: "", salePrice: 0, costPrice: 0, type: "COMPOSTO" });
   const [editing, setEditing] = React.useState<Product | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
-  const [suggested, setSuggested] = React.useState<Record<string, number>>({});
+  const [_suggested, setSuggested] = React.useState<Record<string, number>>({});
 
   const [pricingOpen, setPricingOpen] = React.useState(false);
   const [pricingProduct, setPricingProduct] = React.useState<Product | null>(null);
 
-  const [suggestInfo, setSuggestInfo] = React.useState<Record<string, any>>({});
+  const [_suggestInfo, setSuggestInfo] = React.useState<Record<string, any>>({});
 const [pricing, setPricing] = React.useState<Record<string, any>>({});
   const [pricingDirty, setPricingDirty] = React.useState<Record<string, boolean>>({});
   React.useEffect(() => { pricingRef.current = pricing; }, [pricing]);
@@ -235,6 +246,15 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
   // FISCAL DO PRODUTO (Dialog)
   const [fiscalOpen, setFiscalOpen] = React.useState(false);
   const [fiscalProduct, setFiscalProduct] = React.useState<Product | null>(null);
+  const [fiscalForm, setFiscalForm] = React.useState({
+    origin: 0,
+    ncmId: "",
+    cestId: "",
+    cfopId: "",
+    cstId: "",
+    csosnId: "",
+    taxProfileId: "",
+  });
   const [origin, setOrigin] = React.useState<number>(0);
   const [ncm, setNcm] = React.useState<FiscalOption | null>(null);
   const [cest, setCest] = React.useState<FiscalOption | null>(null);
@@ -254,6 +274,20 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     queryFn: () => fetchProductFiscal(String(fiscalProduct?.id ?? "")),
     enabled: Boolean(fiscalOpen && fiscalProduct?.id),
   });
+
+  React.useEffect(() => {
+    if (!fiscalOpen) return;
+    const f = fiscalQ.data?.fiscal ?? null;
+    setFiscalForm({
+      origin: Number(f?.origin ?? 0),
+      ncmId: String(f?.ncmId ?? ""),
+      cestId: String(f?.cestId ?? ""),
+      cfopId: String(f?.cfopId ?? ""),
+      cstId: String(f?.cstId ?? ""),
+      csosnId: String(f?.csosnId ?? ""),
+      taxProfileId: String(f?.taxProfileId ?? ""),
+    });
+  }, [fiscalOpen, fiscalQ.data]);
 
   React.useEffect(() => {
     if (!fiscalOpen) return;
@@ -321,24 +355,23 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
 
   const saveFiscalMut = useMutation({
     mutationFn: async () => {
-      if (!fiscalProduct?.id) throw new Error("produto_invalido");
-      return saveProductFiscal(fiscalProduct.id, {
-        origin,
-        ncmId: ncm?.id ?? null,
-        cestId: cest?.id ?? null,
-        cfopId: cfop?.id ?? null,
-        cstId: cst?.id ?? null,
-        csosnId: csosn?.id ?? null,
-        taxProfileId: taxProfile?.id ?? null,
+      if (!fiscalProduct?.id) throw new Error("Produto não selecionado");
+      return saveProductFiscal(String(fiscalProduct.id), {
+        origin: Number(fiscalForm.origin ?? 0),
+        ncmId: fiscalForm.ncmId || null,
+        cestId: fiscalForm.cestId || null,
+        cfopId: fiscalForm.cfopId || null,
+        cstId: fiscalForm.cstId || null,
+        csosnId: fiscalForm.csosnId || null,
+        taxProfileId: fiscalForm.taxProfileId || null,
       });
     },
     onSuccess: async () => {
       toast.success("Fiscal do produto salvo.");
-      await qc.invalidateQueries({ queryKey: ["products"] });
       await qc.invalidateQueries({ queryKey: ["product-fiscal", fiscalProduct?.id] });
       setFiscalOpen(false);
     },
-    onError: (e: Error) => toast.error(e?.message ?? "Erro ao salvar fiscal"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao salvar fiscal do produto"),
   });
 
   const createMut = useMutation({
@@ -379,7 +412,7 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const suggestMut = useMutation({
+  const _suggestMut = useMutation({
     mutationFn: ({ id, payload }: any) => suggestPrice(id, payload),
     onSuccess: (data: any, vars: any) => {
       
@@ -393,7 +426,7 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const applySuggestMut = useMutation({
+  const _applySuggestMut = useMutation({
     mutationFn: async ({ id, salePrice }: any) => updateProduct(id, { salePrice }),
     onSuccess: async () => {
       setMsg("Preço aplicado!");
@@ -402,7 +435,7 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const saveRuleMut = useMutation({
+  const _saveRuleMut = useMutation({
     mutationFn: ({ id, payload }: any) => savePricingRule(id, payload),
     onSuccess: async () => {
       setMsg("Regra salva!");
@@ -411,7 +444,7 @@ const [pricing, setPricing] = React.useState<Record<string, any>>({});
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const loadRuleMut = useMutation({
+  const _loadRuleMut = useMutation({
     mutationFn: (id: string) => loadPricingRule(id),
     onSuccess: (rule: any, id: string) => {
       
@@ -439,7 +472,7 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
   });
 
-  const clearRuleMut = useMutation({
+  const _clearRuleMut = useMutation({
     mutationFn: (id: string) => deletePricingRule(id),
     onSuccess: () => setMsg("Regra removida!"),
     onError: (e: any) => setMsg(e?.message ?? "Erro"),
@@ -471,9 +504,9 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
               />
             </Field>
 
-            <Field label="Código / SKU" hint="Ex.: 000025, PT-01, CORR-10...">
+            <Field label="Código / SKU" hint="Vazio = gerado automaticamente (100, 101, 102…). Ou informe 2 a 10 caracteres.">
               <Input
-                placeholder="Código (opcional)"
+                placeholder="Vazio = automático a partir de 100"
                 value={current.code ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -558,187 +591,76 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                   Venda: R$ {Number(p.salePrice ?? 0).toFixed(2)} · Custo: R$ {Number(p.costPrice ?? 0).toFixed(2)} · Tipo: {p.type}
                 </div>
               </div>
-              <div className="flex gap-2">
-  <Button asChild variant="outline" size="sm">
-    <Link href={`/cadastros/produtos/${p.id}/bom`}>BOM</Link>
-  </Button>
-  <Button
-    variant="outline"
-    size="sm"
-    onClick={() => {
-      setFiscalProduct(p);
-      setFiscalOpen(true);
-    }}
-    title="Cadastro fiscal do produto (NCM/CFOP/CST/CSOSN)"
-  >
-    Fiscal
-  </Button>
-  <select
-  className="border rounded p-2 text-sm"
-  title="MARGIN = margem % sobre o preço final | MARKUP = % sobre o custo"
-  value={pricing[p.id]?.mode ?? "MARGIN"}
-  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), mode: e.target.value } })); markDirty(p.id); }}
->
-  <option value="MARGIN">MARGIN</option>
-  <option value="MARKUP">MARKUP</option>
-</select>
-
-<select
-  className="border rounded p-2 text-sm"
-  title="Arredondamento do preço: .99 | múltiplos de 0,50 | normal (2 casas)"
-  value={pricing[p.id]?.rounding ?? "R99"}
-  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), rounding: e.target.value } })); markDirty(p.id); }}
->
-  <option value="R99">.99</option>
-  <option value="R05">0,50</option>
-  <option value="NONE">Normal</option>
-</select>
-
-<Input
-  className="w-24"
-  type="number"
-  step="0.01"
-  placeholder="% over" title="Overhead (%): custos indiretos antes do cálculo (produção, energia, perdas gerais, etc.)"
-  value={Number(pricing[p.id]?.overheadPercent ?? 0)}
-  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), overheadPercent: Number(e.target.value) } })); markDirty(p.id); }}
- />
-
-<Input
-  className="w-24"
-  type="number"
-  step="0.01"
-  placeholder="% taxas" title="Fees (%): taxas antes do cálculo (cartão, marketplace, etc.)"
-  value={Number(pricing[p.id]?.feesPercent ?? 0)}
-  onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), feesPercent: Number(e.target.value) } })); markDirty(p.id); }}
- />
-
-{(pricing[p.id]?.mode ?? "MARGIN") === "MARGIN" ? (
-  <Input
-    className="w-24"
-    type="number"
-    step="0.01"
-    placeholder="% margem" title="Margem (%): lucro como % do preço. Ex: 30% => preço = custo/(1-0,30)"
-    value={Number(pricing[p.id]?.marginPercent ?? 30)}
-    onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), marginPercent: Number(e.target.value) } })); markDirty(p.id); }}
-  />
-) : null}{(pricing[p.id]?.mode ?? "MARGIN") === "MARKUP" ? (
-  <Input
-    className="w-24"
-    type="number"
-    step="0.01"
-    placeholder="% markup" title="Markup (%): acréscimo sobre custo. Ex: 45% => preço = custo*(1+0,45)"
-    value={Number(pricing[p.id]?.markupPercent ?? 0)}
-    onChange={(e) => { setPricing((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? {}), markupPercent: Number(e.target.value) } })); markDirty(p.id); }}
-  />
-) : null}<Button
-  variant="outline"
-  size="sm"
-  onClick={() => {
-    const cfg = pricing[p.id] ?? {};
-    const mode = cfg.mode ?? "MARGIN";
-    const rounding = cfg.rounding ?? "R99";
-
-    const payload: any = {
-      mode,
-      rounding,
-      overheadPercent: Number(cfg.overheadPercent ?? 0),
-      feesPercent: Number(cfg.feesPercent ?? 0),
-    };
-
-    if (mode === "MARGIN") payload.marginPercent = Number(cfg.marginPercent ?? 30);
-    else payload.markupPercent = Number(cfg.markupPercent ?? 0);
-
-    suggestMut.mutate({ id: p.id, payload });
-  }}
-  disabled={suggestMut.isPending || (() => {
-  const cfg = pricing[p.id] ?? {};
-  const mode = cfg.mode ?? "MARGIN";
-  const m = Number(cfg.marginPercent ?? 0);
-  const k = Number(cfg.markupPercent ?? 0);
-  if (mode === "MARGIN") return !isFinite(m) || m <= 0;
-  return !isFinite(k) || k < 0;
-})()}
->
-  {suggestMut.isPending ? "Sugerindo..." : "Sugerir preço"}
-</Button>
-<Button
-  variant="outline"
-  size="sm"
-  onClick={() => {
-    const cfg = pricing[p.id] ?? {};
-    const mode = cfg.mode ?? "MARGIN";
-    const rounding = cfg.rounding ?? "R99";
-
-    const payload: any = {
-      mode,
-      rounding,
-      overheadPercent: Number(cfg.overheadPercent ?? 0),
-      feesPercent: Number(cfg.feesPercent ?? 0),
-    };
-
-    if (mode === "MARGIN") payload.marginPercent = Number(cfg.marginPercent ?? 0);
-    else payload.markupPercent = Number(cfg.markupPercent ?? 0);
-
-    saveRuleMut.mutate({ id: p.id, payload });
-  }}
-  disabled={saveRuleMut.isPending}
->
-  {saveRuleMut.isPending ? "Salvando..." : "Salvar regra"}
-</Button>
-
-<Button
-  variant="outline"
-  size="sm"
-  disabled={loadRuleMut.isPending}
->
-  {loadRuleMut.isPending ? "Carregando..." : "Carregar regra"}
-</Button>
-
-<Button
-  variant="outline"
-  size="sm"
-  onClick={() => clearRuleMut.mutate(p.id)}
-  disabled={clearRuleMut.isPending}
->
-  {clearRuleMut.isPending ? "Removendo..." : "Limpar regra"}
-</Button>
-{suggestInfo[p.id] ? (
-  <div className="text-xs text-muted-foreground px-1">
-    <div><b>Custo BOM:</b> R$ {Number(suggestInfo[p.id]?.costBase ?? 0).toFixed(4)}</div>
-    <div><b>Over/Fee:</b> {Number(suggestInfo[p.id]?.overheadPercent ?? 0).toFixed(2)}% / {Number(suggestInfo[p.id]?.feesPercent ?? 0).toFixed(2)}%</div>
-    <div><b>Custo ajustado:</b> R$ {Number(suggestInfo[p.id]?.costPrice ?? 0).toFixed(4)}</div>
-    <div><b>Preço bruto:</b> R$ {Number(suggestInfo[p.id]?.rawSalePrice ?? 0).toFixed(4)} · <b>Sugerido:</b> R$ {Number(suggestInfo[p.id]?.suggestedSalePrice ?? 0).toFixed(2)}</div>
-    <div><b>Modo:</b> {String(suggestInfo[p.id]?.mode ?? "")} · <b>%</b> {suggestInfo[p.id]?.mode === "MARGIN" ? Number(suggestInfo[p.id]?.marginPercent ?? 0).toFixed(2) : Number(suggestInfo[p.id]?.markupPercent ?? 0).toFixed(2)} · <b>Round:</b> {String(suggestInfo[p.id]?.rounding ?? "")}</div>
-  </div>
-) : null}
-
-{suggested[p.id] ? (
-  <Button
-    variant="outline"
-    size="sm"
-    onClick={() => applySuggestMut.mutate({ id: p.id, salePrice: suggested[p.id] })}
-    disabled={applySuggestMut.isPending}
-  >
-    {applySuggestMut.isPending ? "Aplicando..." : `Aplicar (R$ ${suggested[p.id].toFixed(2)})`}
-  </Button>
-) : null}<Button variant="outline" size="sm" onClick={() => recalcMut.mutate(p.id)} disabled={recalcMut.isPending}>
-  {recalcMut.isPending ? "Recalculando..." : "Recalcular custo (BOM)"}
-</Button>
-
-<Button
-  variant="secondary"
-  size="sm"
-  onClick={() => {
-    setPricingProduct(p);
-    setPricingOpen(true);
-  }}
->
-  Precificar
-</Button>
-
-<Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
-  <Button variant="destructive" size="sm" onClick={() => delMut.mutate(p.id)} disabled={delMut.isPending}>Remover</Button>
-</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/cadastros/produtos/${p.id}/bom`}>BOM</Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setOrigin(0);
+                    setNcm(null);
+                    setCest(null);
+                    setCfop(null);
+                    setCst(null);
+                    setCsosn(null);
+                    setTaxProfile(null);
+                    setQNcm("");
+                    setQCest("");
+                    setQCfop("");
+                    setQCst("");
+                    setQCsosn("");
+                    setQTaxProfile("");
+                    setFiscalForm({
+                      origin: 0,
+                      ncmId: "",
+                      cestId: "",
+                      cfopId: "",
+                      cstId: "",
+                      csosnId: "",
+                      taxProfileId: "",
+                    });
+                    setFiscalProduct(p);
+                    setFiscalOpen(true);
+                  }}
+                  title="Cadastro fiscal do produto (NCM/CFOP/CST/CSOSN)"
+                >
+                  Fiscal
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    setPricingProduct(p);
+                    try {
+                      const rule = await loadPricingRule(p.id);
+                      if (rule)
+                        setPricing((prev) => ({
+                          ...prev,
+                          [p.id]: {
+                            mode: rule.mode,
+                            rounding: rule.rounding,
+                            overheadPercent: Number(rule.overheadPercent ?? 0),
+                            feesPercent: Number(rule.feesPercent ?? 0),
+                            marginPercent: Number(rule.marginPercent ?? 30),
+                            markupPercent: Number(rule.markupPercent ?? 0),
+                          },
+                        }));
+                    } catch {
+                      // sem regra salva: dialog usa defaults
+                    }
+                    setPricingOpen(true);
+                  }}
+                >
+                  Precificar
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => recalcMut.mutate(p.id)} disabled={recalcMut.isPending} title="Recalcular custo a partir do BOM">
+                  {recalcMut.isPending ? "..." : "Recalcular custo"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setEditing(p)}>Editar</Button>
+                <Button variant="destructive" size="sm" onClick={() => delMut.mutate(p.id)} disabled={delMut.isPending}>Remover</Button>
+              </div>
             </div>
           ))}
         </CardContent>
@@ -795,6 +717,10 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                         onClick={() => {
                           setTaxProfile(opt);
                           setQTaxProfile(opt.label);
+                          setFiscalForm((prev) => ({
+                            ...prev,
+                            taxProfileId: String(opt.id),
+                          }));
                         }}
                       >
                         {opt.label}
@@ -809,7 +735,14 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                 <select
                   className="border rounded p-2 w-full"
                   value={String(origin)}
-                  onChange={(e) => setOrigin(Number(e.target.value))}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setOrigin(v);
+                    setFiscalForm((prev) => ({
+                      ...prev,
+                      origin: v,
+                    }));
+                  }}
                 >
                   <option value="0">0 - Nacional</option>
                   <option value="1">1 - Estrangeira (Importação direta)</option>
@@ -842,6 +775,10 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                         onClick={() => {
                           setNcm(opt);
                           setQNcm(opt.label);
+                          setFiscalForm((prev) => ({
+                            ...prev,
+                            ncmId: String(opt.id),
+                          }));
                           // sugestão simples de CEST ao escolher NCM (não sobrescreve se já tiver)
                           if (!cest) {
                             const text = (opt.label ?? "").toLowerCase();
@@ -850,6 +787,11 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                               if (first) {
                                 setCest(first);
                                 setQCest(first.label);
+                                setFiscalForm((prev) => ({
+                                  ...prev,
+                                  ncmId: String(opt.id),
+                                  cestId: String(first.id),
+                                }));
                                 toast.info("CEST sugerido automaticamente com base no NCM.");
                               }
                             }
@@ -880,6 +822,10 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                         onClick={() => {
                           setCest(opt);
                           setQCest(opt.label);
+                          setFiscalForm((prev) => ({
+                            ...prev,
+                            cestId: String(opt.id),
+                          }));
                         }}
                       >
                         {opt.label}
@@ -908,6 +854,10 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                         onClick={() => {
                           setCfop(opt);
                           setQCfop(opt.label);
+                          setFiscalForm((prev) => ({
+                            ...prev,
+                            cfopId: String(opt.id),
+                          }));
                         }}
                       >
                         {opt.label}
@@ -936,6 +886,11 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                           setCsosn(null);
                           setQCsosn("");
                           setQCst(opt.code);
+                          setFiscalForm((prev) => ({
+                            ...prev,
+                            cstId: String(opt.id),
+                            csosnId: "",
+                          }));
                         }}
                       >
                         {opt.label}
@@ -962,6 +917,11 @@ if (!rule) return setMsg("Sem regra salva nesse produto.");
                           setCst(null);
                           setQCst("");
                           setQCsosn(opt.code);
+                          setFiscalForm((prev) => ({
+                            ...prev,
+                            csosnId: String(opt.id),
+                            cstId: "",
+                          }));
                         }}
                       >
                         {opt.label}

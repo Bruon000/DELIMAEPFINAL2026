@@ -140,6 +140,7 @@ export default function ComprasPedidosPage() {
           <Button
             variant="outline"
             size="sm"
+            title="Ver movimentações deste pedido no estoque"
             onClick={(e) => {
               e.stopPropagation();
               const ref = po?.nfeKey ? `NFE:${po.nfeKey}` : `PO:${po.id}`;
@@ -151,21 +152,22 @@ export default function ComprasPedidosPage() {
           <Button
             variant="outline"
             size="sm"
+            title="Copiar referência (para usar nos filtros de Movimentações)"
             onClick={async (e) => {
               e.stopPropagation();
               const ref = po?.nfeKey ? `NFE:${po.nfeKey}` : `PO:${po.id}`;
               try {
                 await navigator.clipboard.writeText(ref);
-                toast.success("Referência copiada: " + ref);
+                toast.success("Referência copiada.");
               } catch {
-                toast.error("Não foi possível copiar para a área de transferência.");
+                toast.error("Não foi possível copiar.");
               }
             }}
           >
             Copiar ref
           </Button>
           <Link href={`/compras/pedidos/${po.id}`} onClick={(e) => e.stopPropagation()}>
-            <Button variant="secondary" size="sm">Abrir</Button>
+            <Button variant="secondary" size="sm" title="Abrir e editar este pedido">Abrir</Button>
           </Link>
         </div>
       ),
@@ -176,51 +178,61 @@ export default function ComprasPedidosPage() {
     <div className="p-6 space-y-4">
       <PageHeader
         title="Compras"
-        subtitle="Pedidos de compra com status, totais e ações. Padrão visual ERP (tabela + filtros + badge)."
+        subtitle="Gerencie pedidos de compra. Abaixo: como adicionar uma compra e a lista de pedidos."
         actions={
           <div className="flex gap-2">
-            <Button asChild variant="outline">
-              <Link href="/compras/importar-nfe">Importar NF-e (XML)</Link>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/ajuda/compras-estoque">Como usar</Link>
             </Button>
-            <Button asChild variant="secondary">
+            <Button asChild variant="outline">
               <Link href="/cadastros/fornecedores">Fornecedores</Link>
             </Button>
           </div>
         }
       />
 
-      <Card>
+      <Card className="border-primary/20">
         <CardHeader>
-          <CardTitle>Novo pedido de compra</CardTitle>
+          <CardTitle className="text-base">Como adicionar uma compra?</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Escolha uma opção conforme você tem ou não a nota fiscal em XML.
+          </p>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="text-xs text-muted-foreground">
-            Se você já tem a NF-e em XML, pode importar e criar o pedido automaticamente.
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_220px] md:items-center">
-            <select
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              disabled={suppliersLoading}
-            >
-              <option value="">{suppliersLoading ? "Carregando fornecedores..." : "Selecione um fornecedor…"}</option>
-              {suppliers.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-
-            <div className="flex flex-col gap-2 md:flex-row md:justify-end">
-              <Button asChild variant="outline" className="w-full md:w-auto">
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+              <p className="font-medium text-sm">Tenho o XML da nota fiscal (NF-e)</p>
+              <p className="text-xs text-muted-foreground">
+                Importe o arquivo XML que a distribuidora enviou. O sistema cria o pedido, os itens e já pode dar entrada no estoque.
+              </p>
+              <Button asChild className="w-full md:w-auto">
                 <Link href="/compras/importar-nfe">Importar NF-e (XML)</Link>
               </Button>
-              <Button
-                disabled={!supplierId || mut.isPending}
-                onClick={() => mut.mutate({ supplierId })}
-                className="w-full md:w-auto"
-              >
-                {mut.isPending ? "Criando..." : "Criar pedido"}
-              </Button>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+              <p className="font-medium text-sm">Ainda não tenho a nota — quero só anotar o pedido</p>
+              <p className="text-xs text-muted-foreground">
+                Crie um rascunho escolhendo o fornecedor. Depois adicione os itens manualmente. Quando a nota chegar, você pode importar o XML ou receber direto.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="h-10 min-w-[200px] rounded-md border bg-background px-3 text-sm"
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  disabled={suppliersLoading}
+                >
+                  <option value="">{suppliersLoading ? "Carregando…" : "Selecione o fornecedor…"}</option>
+                  {suppliers.map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <Button
+                  disabled={!supplierId || mut.isPending}
+                  onClick={() => mut.mutate({ supplierId })}
+                >
+                  {mut.isPending ? "Criando..." : "Criar pedido"}
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
