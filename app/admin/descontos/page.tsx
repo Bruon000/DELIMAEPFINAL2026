@@ -54,12 +54,18 @@ export default function AdminDescontosPage() {
 
   const columns: Column<any>[] = [
     {
-      key: "quote",
-      header: "Orçamento",
+      key: "entity",
+      header: "Orçamento / Pedido",
       cell: (r) => (
         <div className="min-w-[320px]">
-          <div className="font-medium">{r.quote?.number ? `Orç. ${r.quote.number}` : r.quoteId}</div>
-          <div className="text-xs text-muted-foreground">QuoteId: {r.quoteId}</div>
+          <div className="font-medium">
+            {r.source === "order"
+              ? (r.order?.number ? `Ped. ${r.order.number}` : r.orderId)
+              : (r.quote?.number ? `Orç. ${r.quote.number}` : r.quoteId)}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {r.source === "order" ? "Pedido" : "Orçamento"} · {r.source === "order" ? r.orderId : r.quoteId}
+          </div>
         </div>
       ),
     },

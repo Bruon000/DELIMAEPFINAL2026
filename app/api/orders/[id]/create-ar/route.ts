@@ -20,7 +20,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   } as any);
 
   if (!order) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
-  if (String(order.status) !== "DRAFT") {
+  if (!["DRAFT", "OPEN"].includes(String(order.status))) {
     return NextResponse.json({ error: "order_not_draft", status: order.status }, { status: 400 });
   }
 

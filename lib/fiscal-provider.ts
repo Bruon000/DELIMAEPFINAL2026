@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import type { FiscalProvider, FiscalDocType, ProviderEmitResult, ProviderConsultResult, ProviderCancelResult } from "@/lib/fiscal/types";
+import type { FiscalProvider, FiscalDocType, FiscalEmitPayload, ProviderEmitResult, ProviderConsultResult, ProviderCancelResult } from "@/lib/fiscal/types";
 import { mockProvider } from "@/lib/fiscal/providers/mock";
 import { nuvemFiscalProvider } from "@/lib/fiscal/providers/nuvemfiscal";
 import { focusNfeProvider } from "@/lib/fiscal/providers/focusnfe";
 import { tecnospeedProvider } from "@/lib/fiscal/providers/tecnospeed";
 import { createNotConfiguredProvider } from "@/lib/fiscal/errors";
 
-export type { FiscalProvider, FiscalDocType, ProviderEmitResult, ProviderConsultResult, ProviderCancelResult };
+export type { FiscalProvider, FiscalDocType, FiscalEmitPayload, ProviderEmitResult, ProviderConsultResult, ProviderCancelResult };
 export { mockProvider };
 
 /**

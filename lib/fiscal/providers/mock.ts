@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { FiscalProvider } from "@/lib/fiscal/types";
+import type { FiscalProvider, ProviderCancelResult, ProviderConsultResult } from "@/lib/fiscal/types";
 
 function mockId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
@@ -15,7 +15,7 @@ export const mockProvider: FiscalProvider = {
       where: { id: invoiceId },
       data: {
         externalId,
-        status: "PENDING",
+        status: "AUTHORIZED",
         model: model ?? null,
         payload: {
           ...((await prisma.fiscalInvoice.findUnique({ where: { id: invoiceId }, select: { payload: true } }))?.payload as object),
@@ -24,33 +24,54 @@ export const mockProvider: FiscalProvider = {
       },
     });
 
-    return { externalId, status: "PENDING", model, raw: { mocked: true } };
+    return { externalId, status: "AUTHORIZED", model, raw: { mocked: true } };
   },
 
-  async cancel({ invoiceId, reason }) {
-    await prisma.fiscalInvoice.update({
-      where: { id: invoiceId },
-      data: {
-        status: "CANCELLED",
-        payload: {
-          ...((await prisma.fiscalInvoice.findUnique({ where: { id: invoiceId }, select: { payload: true } }))?.payload as object),
-          cancel: { reason, at: new Date().toISOString() },
-        },
-      },
-    });
-    return { status: "CANCELLED", raw: { mocked: true } };
-  },
-
-  async consult({ invoiceId }) {
-    const inv = await prisma.fiscalInvoice.findUnique({ where: { id: invoiceId } });
+  async cancel(args): Promise<ProviderCancelResult> {
     return {
-      status: inv?.status ?? "UNKNOWN",
-      externalId: inv?.externalId ?? undefined,
-      key: inv?.key ?? undefined,
-      pdfUrl: inv?.pdfUrl ?? undefined,
-      xmlUrl: inv?.xmlUrl ?? undefined,
-      issuedAt: inv?.issuedAt ? inv.issuedAt.toISOString() : undefined,
+      ok: true,
+      provider: "MOCK",
+      externalId: args.externalId || "mock-id",
+      status: "CANCELLED",
+      key: null,
+      protocol: null,
+      statusCode: 135,
+      statusReason: "Evento registrado e vinculado à NF-e",
+      raw: {},
+    };
+  },
+
+  async consult({ invoiceId }): Promise<ProviderConsultResult> {
+    const inv = await prisma.fiscalInvoice.findUnique({ where: { id: invoiceId } });
+    const status = (inv?.status ?? "PENDING") as ProviderConsultResult["status"];
+    return {
+      ok: true,
+      provider: "MOCK",
+      externalId: inv?.externalId ?? "",
+      status: ["PENDING", "AUTHORIZED", "REJECTED", "CANCELLED", "ERROR"].includes(status) ? status : "PENDING",
+      key: inv?.key ?? null,
+      protocol: null,
+      receipt: null,
+      statusCode: null,
+      statusReason: null,
+      xmlUrl: inv?.xmlUrl ?? null,
+      pdfUrl: inv?.pdfUrl ?? null,
       raw: inv?.payload ?? null,
+    };
+  },
+
+  async download(args) {
+    return {
+      ok: true,
+      provider: "MOCK",
+      externalId: args.externalId || "mock-id",
+      xmlProc: {
+        content: "<nfeProc></nfeProc>",
+        mimeType: "application/xml",
+        sizeBytes: 19,
+      },
+      pdf: null,
+      raw: {},
     };
   },
 };

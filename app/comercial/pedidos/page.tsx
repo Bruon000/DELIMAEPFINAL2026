@@ -223,8 +223,8 @@ export default function ComercialPedidosPage() {
         subtitle="Lista de pedidos para o vendedor (filtros, status e ação rápida de confirmar)."
         actions={
           <div className="flex gap-2">
-            <Link href="/pedidos/novo">
-              <Button>Novo pedido</Button>
+            <Link href="/comercial/venda">
+              <Button>Nova venda</Button>
             </Link>
             <Button variant="secondary" onClick={() => listQ.refetch()}>
               Recarregar

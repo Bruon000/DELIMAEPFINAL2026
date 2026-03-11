@@ -14,15 +14,16 @@ async function recalcOrder(tx: any, orderId: string) {
 
   const order = await tx.order.findFirst({
     where: { id: orderId } as any,
-    select: { discount: true } as any,
+    select: { discount: true, discountPercent: true } as any,
   } as any);
 
-  const discount = n(order?.discount);
+  const pct = n(order?.discountPercent);
+  const discount = pct > 0 ? subtotal * (pct / 100) : n(order?.discount);
   const total = Math.max(0, subtotal - discount);
 
   await tx.order.update({
     where: { id: orderId } as any,
-    data: { subtotal, total } as any,
+    data: { subtotal, discount, total } as any,
   } as any);
 }
 

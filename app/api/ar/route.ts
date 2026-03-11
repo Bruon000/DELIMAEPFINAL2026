@@ -7,12 +7,6 @@ function n(v: any) {
   return Number.isFinite(x) ? x : 0;
 }
 
-function toDateOrNull(v: any) {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isFinite(d.getTime()) ? d : null;
-}
-
 export async function POST(req: Request) {
   const gate = await requireRole(["ADMIN", "CAIXA"]);
   if (!gate.ok) return gate.res;
@@ -32,14 +26,14 @@ export async function POST(req: Request) {
 
   if (!order?.id) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
 
-  if ((order as any).status !== ("DRAFT" as any)) {
+  const allowedStatuses = ["DRAFT", "OPEN"];
+  if (!allowedStatuses.includes(String((order as any).status))) {
     return NextResponse.json(
-      { error: "invalid_order_status", message: "Somente pedido DRAFT pode gerar contas a receber no PDV." },
+      { error: "invalid_order_status", message: "Somente pedido DRAFT/OPEN pode gerar contas a receber no PDV." },
       { status: 409 }
     );
   }
 
-  // opcional (alinhado ao seu fluxo): só cria AR se o pedido já foi enviado ao caixa
   if (!(order as any).sentToCashierAt) {
     return NextResponse.json(
       { error: "order_not_sent_to_cashier", message: "Envie o pedido ao caixa antes de criar o recebível." },
@@ -64,7 +58,6 @@ export async function POST(req: Request) {
   }
 
   const computedTotal = ((order as any).items ?? []).reduce((s: number, it: any) => s + n(it.total), 0);
-
   const amount = body?.amount != null ? n(body.amount) : computedTotal;
   if (!(amount > 0)) {
     return NextResponse.json(
@@ -73,13 +66,53 @@ export async function POST(req: Request) {
     );
   }
 
-  const dueDate = toDateOrNull(body?.dueDate) ?? new Date();
+  const installments = Math.max(1, Math.min(60, n((order as any).installments) || 1));
+  const dueDays = n((order as any).dueDays);
+  const intervalDays = Math.max(1, Math.min(365, n((order as any).intervalDays) || 30));
+  const isParcelado = installments > 1;
 
+  function addDays(d: Date, days: number) {
+    const out = new Date(d);
+    out.setDate(out.getDate() + days);
+    return out;
+  }
+
+  if (isParcelado) {
+    const parcelAmount = Math.round((amount / installments) * 100) / 100;
+    const firstDueDays = dueDays > 0 ? dueDays : intervalDays;
+    const ars: any[] = [];
+    for (let i = 0; i < installments; i++) {
+      const dueDate = addDays(new Date(), firstDueDays + i * intervalDays);
+      const ar = await prisma.accountsReceivable.create({
+        data: {
+          companyId,
+          orderId,
+          dueDate,
+          amount: parcelAmount as any,
+          status: "PENDING" as any,
+        } as any,
+        select: {
+          id: true,
+          orderId: true,
+          dueDate: true,
+          amount: true,
+          status: true,
+          paidAt: true,
+          paidAmount: true,
+          createdAt: true,
+        } as any,
+      } as any);
+      ars.push(ar);
+    }
+    return NextResponse.json({ ok: true, ar: ars[0], ars, installments: ars.length }, { status: 201 });
+  }
+
+  const singleDueDate = addDays(new Date(), dueDays);
   const ar = await prisma.accountsReceivable.create({
     data: {
       companyId,
       orderId,
-      dueDate,
+      dueDate: singleDueDate,
       amount: amount as any,
       status: "PENDING" as any,
     } as any,

@@ -10,6 +10,9 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const userId = session.user.id as string;
   const id = ctx.params.id;
 
+  const body = await req.json().catch(() => null);
+  const paidAt = body?.paidAt ? new Date(String(body.paidAt)) : new Date();
+
   const ap = await prisma.accountsPayable.findFirst({ where: { id, companyId } as any } as any);
   if (!ap) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (String(ap.status ?? "") === "PAID") return NextResponse.json({ ok: true, alreadyPaid: true });
@@ -27,7 +30,6 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     );
   }
 
-  const now = new Date();
   const amount = Number(ap.amount ?? 0);
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: "amount_invalid" }, { status: 400 });
@@ -36,7 +38,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   await prisma.$transaction(async (tx) => {
     await tx.accountsPayable.update({
       where: { id } as any,
-      data: { status: "PAID" as any, paidAt: now } as any,
+      data: { status: "PAID" as any, paidAt } as any,
     } as any);
 
     await tx.cashTransaction.create({

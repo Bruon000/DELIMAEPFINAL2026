@@ -20,51 +20,59 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
 
   const amount = n(ar.amount);
 
-  // opcional: payload { paidAt?: string, note?: string }
+  // payload { paidAt?: string (YYYY-MM-DD ou ISO), note?, paymentMethod? }
   const body = await req.json().catch(() => null);
-  const paidAt = body?.paidAt ? new Date(String(body.paidAt)) : new Date();
-  const note = String(body?.note ?? "").trim();
+  const paidAtRaw = body?.paidAt ? String(body.paidAt).trim() : null;
+  // Interpretar YYYY-MM-DD como data local (evita mostrar dia anterior por causa de UTC)
+  let paidAt: Date;
+  if (paidAtRaw && /^\d{4}-\d{2}-\d{2}$/.test(paidAtRaw)) {
+    const [y, m, d] = paidAtRaw.split("-").map(Number);
+    paidAt = new Date(y, m - 1, d, 12, 0, 0);
+  } else if (paidAtRaw) {
+    paidAt = new Date(paidAtRaw);
+    if (Number.isNaN(paidAt.getTime())) paidAt = new Date();
+  } else {
+    paidAt = new Date();
+  }
+  const paymentMethod = String(body?.paymentMethod ?? "").trim();
+  const noteRaw = String(body?.note ?? "").trim();
+  const note = paymentMethod ? (noteRaw ? `${paymentMethod} - ${noteRaw}` : paymentMethod) : noteRaw;
+
+  // Exige caixa aberto: não criar sessão automaticamente
+  const sessionOpen = await prisma.cashSession.findFirst({
+    where: { companyId, userId, closedAt: null } as any,
+    orderBy: { openedAt: "desc" } as any,
+    select: { id: true } as any,
+  } as any);
+
+  if (!sessionOpen?.id) {
+    return NextResponse.json(
+      { error: "cash_not_open", message: "Abra o caixa antes de receber (Financeiro → Abrir/Fechar Caixa)." },
+      { status: 400 },
+    );
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     // 1) Marcar AR como paga
     const updatedAr = await tx.accountsReceivable.update({
       where: { id } as any,
-      data: { status: "PAID" as any, paidAt } as any,
+      data: { status: "PAID" as any, paidAt, paidAmount: amount as any } as any,
     } as any);
 
-    // 2) Garantir sessão de caixa aberta
-    let sessionOpen = await tx.cashSession.findFirst({
-      where: { companyId, userId, closedAt: null },
-      orderBy: { openedAt: "desc" },
-    } as any);
-
-    if (!sessionOpen) {
-      sessionOpen = await tx.cashSession.create({
-        data: {
-          companyId,
-          userId,
-          openedAt: new Date(),
-          openingBalance: 0,
-        } as any,
-      } as any);
-    }
-
-    // 3) Registrar transação IN
+    // 2) Registrar transação IN na sessão já aberta
     const description =
       note ||
       `Recebimento AR ${updatedAr.id} (Pedido ${ar.orderId})`;
 
     const cashTx = await tx.cashTransaction.create({
       data: {
-        sessionId: sessionOpen.id,
+        sessionId: sessionOpen!.id,
         type: "IN",
         amount,
         description,
-        // campos extras se existirem no schema (não quebra por causa do as any):
-        accountsReceivableId: updatedAr.id,
-        orderId: ar.orderId,
-      } as any,
-    } as any);
+        reference: `AR:${updatedAr.id}|order:${ar.orderId}`,
+      },
+    });
 
     return { cashSessionId: sessionOpen.id, cashTransactionId: cashTx.id, accountsReceivableId: updatedAr.id };
   });

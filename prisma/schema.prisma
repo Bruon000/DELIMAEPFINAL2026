@@ -37,7 +37,8 @@ model Company {
   costCenters         CostCenter[]
   fiscalConfig        FiscalConfig?
   fiscalSeries        FiscalSeries[]
-  fiscalInvoices      FiscalInvoice[]
+  fiscalInvoices        FiscalInvoice[]
+  fiscalInutilizations  FiscalInutilization[]
 
   pricingConfig  PricingConfig?
   notifications  Notification[]
@@ -48,6 +49,8 @@ model Company {
   productPricingRules   ProductPricingRule[]
   quotes                Quote[]
   discountApprovalReqs  DiscountApprovalRequest[]
+  orderDiscountApprovalReqs OrderDiscountApprovalRequest[]
+  materialSupplierRefs MaterialSupplierRef[]
 }
 
 model CompanyTheme {
@@ -193,14 +196,17 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   auditLogs     AuditLog[]
-  ordersCreated Order[]        @relation("OrderCreatedBy")
-  quotesCreated Quote[]        @relation("QuoteCreatedBy")
+  ordersCreated   Order[]        @relation("OrderCreatedBy")
+  ordersConfirmed Order[]        @relation("OrderConfirmedBy")
+  quotesCreated   Quote[]        @relation("QuoteCreatedBy")
   cashSessions  CashSession[]
   notifications Notification[]
   timeEntries   TimeEntry[]
 
   discountApprovalReqsRequested DiscountApprovalRequest[] @relation("DiscountRequestedBy")
   discountApprovalReqsApproved  DiscountApprovalRequest[] @relation("DiscountApprovedBy")
+  orderDiscountReqsRequested    OrderDiscountApprovalRequest[] @relation("OrderDiscountRequestedBy")
+  orderDiscountReqsApproved    OrderDiscountApprovalRequest[] @relation("OrderDiscountApprovedBy")
 }
 
 // ========== 2) CADASTROS FUNDAMENTAIS ==========
@@ -247,6 +253,8 @@ model Client {
   addressState    String?
   addressZip      String?
   cityCodeIbge    String?
+  fiscalNote      String?
+  internalNote    String?
 
   Quote           Quote[]
 }
@@ -265,6 +273,7 @@ model Supplier {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   purchaseOrders PurchaseOrder[]
+  materialSupplierRefs MaterialSupplierRef[]
 
   tradeName       String?
   ie              String?
@@ -323,6 +332,31 @@ model Material {
   bomItems           BOMItem[]
   stockLedger        StockLedger[]
   purchaseOrderItems PurchaseOrderItem[]
+  materialSupplierRefs MaterialSupplierRef[]
+}
+
+// Referência de códigos / nomes de fornecedor para um material interno.
+// Ex.: fornecedor A chama de "BARRA CHATA 3/4", fornecedor B chama diferente,
+// mas ambos apontam para o mesmo Material.
+model MaterialSupplierRef {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  code String? // código do fornecedor na NF-e (cProd)
+  name String? // nome do fornecedor na NF-e (xProd)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, supplierId, code])
+  @@index([companyId, code])
 }
 
 model Product {
@@ -429,10 +463,13 @@ model Order {
   client         Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
   createdById    String?
   createdBy      User?       @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  confirmedById  String?
+  confirmedBy    User?       @relation("OrderConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
   number         String? // número do pedido (sequencial)
   status         OrderStatus @default(DRAFT)
   subtotal       Decimal     @default(0) @db.Decimal(15, 4)
   discount       Decimal     @default(0) @db.Decimal(15, 4)
+  discountPercent Decimal    @default(0) @db.Decimal(5, 2) // até 5% livre; >5% aprovação admin
   total          Decimal     @default(0) @db.Decimal(15, 4)
   notes          String?
   technicalNotes String? // medidas, detalhes
@@ -442,17 +479,20 @@ model Order {
   requestedDocType FiscalDocType? // NFCE/NFE etc.
   paymentMethod    PaymentMethod?
   cardBrand        CardBrand?
-  installments     Int?
+  installments     Int?       // 1 = à vista/único; >1 = parcelado (N parcelas)
+  dueDays          Int?       // vencimento em X dias: 1ª parcela ou único recebível (ex.: 5, 15, 30)
+  intervalDays     Int?       // parcelado: intervalo entre parcelas em dias (ex.: 5, 15, 30)
   paymentNote      String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   deletedAt      DateTime?
 
-  items              OrderItem[]
-  statusHistory      OrderStatusHistory[]
-  productionOrders   ProductionOrder[]
-  accountsReceivable AccountsReceivable[]
-  installationOrder  InstallationOrder?
+  items                    OrderItem[]
+  statusHistory            OrderStatusHistory[]
+  productionOrders         ProductionOrder[]
+  accountsReceivable       AccountsReceivable[]
+  installationOrder        InstallationOrder?
+  orderDiscountRequests   OrderDiscountApprovalRequest[]
 }
 
 model OrderStatusHistory {
@@ -559,6 +599,26 @@ model DiscountApprovalRequest {
   requestedBy   User   @relation("DiscountRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
   approvedById  String?
   approvedBy    User?  @relation("DiscountApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  requestedPercent Decimal  @db.Decimal(5, 2)
+  approvedPercent  Decimal? @db.Decimal(5, 2)
+  reason           String?
+  status           DiscountApprovalStatus @default(PENDING)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model OrderDiscountApprovalRequest {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  requestedById String
+  requestedBy   User   @relation("OrderDiscountRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedById  String?
+  approvedBy    User?  @relation("OrderDiscountApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
   requestedPercent Decimal  @db.Decimal(5, 2)
   approvedPercent  Decimal? @db.Decimal(5, 2)
@@ -851,6 +911,14 @@ model FiscalConfig {
   providerBaseUrl String?
   webhookSecret   String?
 
+  // Operação real
+  certificateType     String?   @default("A1") // A1
+  certificatePfxBase64 String?   @db.Text
+  certificatePassword  String?
+  certificateUpdatedAt DateTime?
+  csc                  String?
+  cscId                String?
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -1004,8 +1072,29 @@ model FiscalInvoice {
 
   company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  inutilizedAt DateTime?
+
   @@unique([companyId, docType, key])
   @@index([companyId, docType, status])
+}
+
+model FiscalInutilization {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  docType      String   // NFE, NFCE
+  serie        Int
+  numberStart  Int
+  numberEnd    Int
+  reason       String
+  status       String   // PENDING, SUCCESS, FAILED
+  externalId   String?
+  response     Json?
+  requestedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([companyId, docType])
 }
 
 // ========== 11) NOTIFICAÇÕES ==========
@@ -1088,6 +1177,10 @@ model PurchaseOrderItem {
   quantity Decimal @db.Decimal(15, 4)
   unitCost Decimal @db.Decimal(15, 4)
   total    Decimal @db.Decimal(15, 4)
+
+  cfop String? // CFOP da NF-e por item (ex.: 5102, 5405)
+  ncm  String? // NCM do item na nota
+  cest String? // CEST quando existir
 
   createdAt DateTime @default(now())
 }

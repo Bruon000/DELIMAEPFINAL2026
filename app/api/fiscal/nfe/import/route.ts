@@ -71,7 +71,10 @@ export async function POST(req: Request) {
     const unit = String(prod?.uCom ?? "").trim() || null;
     const unitCost = n(prod?.vUnCom);
     const total = n(prod?.vProd);
-    return { name, cProd, qty, unit, unitCost, total };
+    const cfop = String(prod?.CFOP ?? "").trim() || null;
+    const ncm = String(prod?.NCM ?? "").trim() || null;
+    const cest = String(prod?.CEST ?? "").trim() || null;
+    return { name, cProd, qty, unit, unitCost, total, cfop, ncm, cest };
   }).filter((x: any) => x.name && x.qty > 0 && x.unitCost >= 0);
 
   if (items.length === 0) {
@@ -218,23 +221,63 @@ export async function POST(req: Request) {
 
       throw new Error("unit_required: cadastre ao menos 1 unidade em /cadastros/unidades (ex: UN)");
     }
-    // 4) mapear itens -> Materials: primeiro por code (cProd), depois por nome
+    // 4) mapear itens -> Materials:
+    //    1) tenta usar mapeamento por fornecedor (MaterialSupplierRef)
+    //    2) depois código interno (Material.code)
+    //    3) depois nome igual (Material.name)
+    //    4) se nada achar, cria um novo Material e grava o mapeamento para próximas notas
     for (const it of items) {
       let mat: { id: string } | null = null;
-      if (it.cProd) {
+
+      // 4.1) mapeamento específico por fornecedor + código da NF (cProd)
+      if (supplierId && it.cProd) {
+        const ref = await tx.materialSupplierRef.findFirst({
+          where: {
+            companyId,
+            supplierId,
+            code: it.cProd,
+          } as any,
+          select: { materialId: true },
+        } as any);
+        if (ref?.materialId) {
+          mat = { id: ref.materialId };
+        }
+      }
+
+      // 4.2) mapeamento genérico (sem supplier) por código de fornecedor
+      if (!mat?.id && it.cProd) {
+        const ref = await tx.materialSupplierRef.findFirst({
+          where: {
+            companyId,
+            supplierId: null,
+            code: it.cProd,
+          } as any,
+          select: { materialId: true },
+        } as any);
+        if (ref?.materialId) {
+          mat = { id: ref.materialId };
+        }
+      }
+
+      // 4.3) código interno do material
+      if (!mat?.id && it.cProd) {
         mat = await tx.material.findFirst({
           where: { companyId, deletedAt: null, code: it.cProd } as any,
           select: { id: true },
         } as any);
       }
+
+      // 4.4) nome igual (case-insensitive)
       if (!mat?.id) {
         mat = await tx.material.findFirst({
           where: { companyId, deletedAt: null, name: { equals: it.name, mode: "insensitive" } as any } as any,
           select: { id: true },
         } as any);
       }
+
       let materialId = mat?.id ?? null;
 
+      // 4.5) se ainda não existir, cria o Material
       if (!materialId) {
         const createdMat = await tx.material.create({
           data: {
@@ -249,6 +292,23 @@ export async function POST(req: Request) {
         materialId = createdMat.id;
       }
 
+      // 4.6) grava mapeamento fornecedor + código/nome para próximas notas
+      if (supplierId && materialId && (it.cProd || it.name)) {
+        try {
+          await tx.materialSupplierRef.create({
+            data: {
+              companyId,
+              materialId,
+              supplierId,
+              code: it.cProd ?? null,
+              name: it.name,
+            } as any,
+          } as any);
+        } catch {
+          // se der conflito ou erro de concorrência, ignoramos (não impacta o fluxo principal)
+        }
+      }
+
       const total = n(it.qty) * n(it.unitCost);
 
       await tx.purchaseOrderItem.create({
@@ -258,6 +318,9 @@ export async function POST(req: Request) {
           quantity: n(it.qty),
           unitCost: n(it.unitCost),
           total,
+          cfop: it.cfop ?? undefined,
+          ncm: it.ncm ?? undefined,
+          cest: it.cest ?? undefined,
         } as any,
       } as any);
     }

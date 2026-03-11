@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
+function onlyDigits(v: unknown) {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
 export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   const gate = await requireRole(["ADMIN"]);
   if (!gate.ok) return gate.res;
@@ -12,7 +16,17 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
 
   const data: any = {};
   if (body?.name != null) data.name = String(body.name).trim();
-  if (body?.document != null) data.document = String(body.document).trim() || null;
+  if (body?.document != null) {
+    const raw = String(body.document).trim();
+    const digits = onlyDigits(raw);
+    if (raw && digits.length !== 11 && digits.length !== 14 && raw.toUpperCase() !== "WALKIN") {
+      return NextResponse.json(
+        { error: "invalid_document", message: "Documento deve ser CPF, CNPJ ou WALKIN." },
+        { status: 400 },
+      );
+    }
+    data.document = raw || null;
+  }
   if (body?.email != null) data.email = String(body.email).trim() || null;
   if (body?.phone != null) data.phone = String(body.phone).trim() || null;
 
@@ -24,7 +38,7 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   if (body?.addressNumber != null) data.addressNumber = String(body.addressNumber).trim() || null;
   if (body?.addressDistrict != null) data.addressDistrict = String(body.addressDistrict).trim() || null;
   if (body?.addressCity != null) data.addressCity = String(body.addressCity).trim() || null;
-  if (body?.addressState != null) data.addressState = String(body.addressState).trim() || null;
+  if (body?.addressState != null) data.addressState = String(body.addressState).trim().toUpperCase() || null;
   if (body?.addressZip != null) data.addressZip = String(body.addressZip).trim() || null;
   if (body?.cityCodeIbge != null) data.cityCodeIbge = String(body.cityCodeIbge).trim() || null;
   if (body?.isActive != null) data.isActive = !!body.isActive;

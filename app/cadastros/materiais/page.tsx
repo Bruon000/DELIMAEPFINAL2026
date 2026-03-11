@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatQuantity } from "@/lib/format-quantity";
 
 async function fetchUnits() {
   const res = await fetch("/api/units");
@@ -104,7 +105,10 @@ export default function MateriaisPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Materiais</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Materiais</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Quantidade em estoque visível para o vendedor ficar ciente do que tem.</p>
+        </div>
         <Button asChild variant="outline">
           <Link href="/cadastros">Voltar</Link>
         </Button>
@@ -204,20 +208,43 @@ export default function MateriaisPage() {
         <CardHeader><CardTitle>Lista</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {isLoading && <p>Carregando...</p>}
-          {materials.map((m: any) => (
-            <div key={m.id} className="flex items-center justify-between border rounded p-3">
-              <div>
-                <div className="font-medium">{m.code ? `${m.code} - ` : ""}{m.name}</div>
-                <div className="text-sm text-muted-foreground">
-                  Unidade: {m.unit?.code ?? m.unitId} · Custo: R$ {Number(m.currentCost ?? 0).toFixed(2)} · Min: {m.minStock ?? "-"}
+          {materials.map((m: any) => {
+            const qty = Number(m.stockItem?.quantity ?? 0);
+            const res = Number(m.stockItem?.reserved ?? 0);
+            const min = m.minStock != null ? Number(m.minStock) : null;
+            const isCritical = min != null && min > 0 && qty < min;
+            const unitCode = m.unit?.code ?? "un";
+            return (
+              <div
+                key={m.id}
+                className={`flex items-center justify-between border rounded p-3 ${isCritical ? "border-amber-500/60 bg-amber-50/50 dark:bg-amber-950/20" : ""}`}
+              >
+                <div>
+                  <div className="font-medium flex items-center gap-2">
+                    {m.code ? `${m.code} - ` : ""}{m.name}
+                    {isCritical && (
+                      <span className="text-xs font-normal px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-200">
+                        Crítico
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Unidade: {unitCode} · Custo: R$ {Number(m.currentCost ?? 0).toFixed(2)} · Min: {m.minStock ?? "-"}
+                    {" · "}
+                    <span className="font-medium text-foreground">Estoque: {formatQuantity(qty, unitCode)} {unitCode}</span>
+                    {res > 0 && <span className="text-muted-foreground/80"> ({formatQuantity(res, unitCode)} res.)</span>}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/estoque/movimentacoes?materialId=${encodeURIComponent(m.id)}`}>Movimentações</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setEditing(m)}>Editar</Button>
+                  <Button variant="destructive" size="sm" onClick={() => delMut.mutate(m.id)} disabled={delMut.isPending}>Remover</Button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditing(m)}>Editar</Button>
-                <Button variant="destructive" size="sm" onClick={() => delMut.mutate(m.id)} disabled={delMut.isPending}>Remover</Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     </div>

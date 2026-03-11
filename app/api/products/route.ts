@@ -61,19 +61,50 @@ export async function POST(req: Request) {
     );
   }
 
+  let resolvedCode: string | null = code || null;
+  if (!resolvedCode) {
+    const existing = await prisma.product.findMany({
+      where: { companyId, deletedAt: null },
+      select: { code: true },
+    });
+    let maxNum = 99;
+    for (const row of existing) {
+      const c = String((row as any).code ?? "").trim();
+      if (!c) continue;
+      const num = parseInt(c, 10);
+      if (Number.isFinite(num) && num >= 100 && num <= 999999 && String(num) === c) {
+        maxNum = Math.max(maxNum, num);
+      }
+    }
+    resolvedCode = String(maxNum + 1);
+  } else {
+    const trimmed = resolvedCode.trim();
+    if (trimmed.length < 2 || trimmed.length > 10) {
+      return NextResponse.json(
+        { error: "invalid_code", message: "Código deve ter entre 2 e 10 caracteres." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const data: any = {
+    id: `prd_${Date.now()}`,
+    company: { connect: { id: companyId } },
+    name,
+    code: resolvedCode,
+    salePrice,
+    costPrice: Number.isFinite(costPrice) ? costPrice : null,
+    type: type as any,
+    unit: { connect: { id: resolvedUnitId } },
+    isActive: true,
+  };
+
+  if (categoryId) {
+    data.category = { connect: { id: categoryId } };
+  }
+
   const product = await prisma.product.create({
-    data: {
-      id: `prd_${Date.now()}`,
-      company: { connect: { id: companyId } },
-      name,
-      code: code || null,
-      salePrice,
-      costPrice: Number.isFinite(costPrice) ? costPrice : null,
-      type: type as any,
-      categoryId: categoryId || null,
-      unit: { connect: { id: resolvedUnitId } },
-      isActive: true,
-    } as any,
+    data,
     select: { id: true, name: true, code: true, salePrice: true, costPrice: true, type: true, isActive: true },
   } as any);
 

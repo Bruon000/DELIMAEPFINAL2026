@@ -94,14 +94,9 @@ export function Topbar({ title = "Dashboard", actions }: TopbarProps) {
         </div>
 
         {role === "VENDEDOR" ? (
-          <>
-            <Button asChild size="sm">
-              <Link href="/comercial/venda">Iniciar venda</Link>
-            </Button>
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/pedidos/novo">Novo pedido</Link>
-            </Button>
-          </>
+          <Button asChild size="sm">
+            <Link href="/comercial/venda">Iniciar venda</Link>
+          </Button>
         ) : null}
 
         {(role === "ADMIN" || role === "PRODUCAO") ? (
@@ -112,7 +107,7 @@ export function Topbar({ title = "Dashboard", actions }: TopbarProps) {
 
         {(role === "CAIXA" || role === "ADMIN" || role === "CONTADOR") ? (
           <Button asChild variant="secondary" size="sm">
-            <Link href="/financeiro/caixa">Receber</Link>
+            <Link href="/financeiro/recebimentos">Recebimentos</Link>
           </Button>
         ) : null}
 

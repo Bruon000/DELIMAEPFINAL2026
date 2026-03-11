@@ -199,6 +199,9 @@ export default function CompraDetailPage() {
   const nfeKey = (po as any)?.nfeKey ?? (po as any)?.nfe?.key ?? null;
   const nfeIssuedAtRaw = (po as any)?.nfeIssuedAt ?? (po as any)?.nfe?.issuedAt ?? null;
   const nfeIssuedAt = nfeIssuedAtRaw ? new Date(nfeIssuedAtRaw).toLocaleString("pt-BR") : null;
+  const poCreatedAt = (po as any)?.createdAt ? new Date((po as any).createdAt).toLocaleDateString("pt-BR") : null;
+  const titleDate = nfeIssuedAt ?? poCreatedAt ?? id.slice(-8);
+  const pageTitle = `Pedido de Compra — ${po.supplier?.name ?? "Compra"} — ${titleDate}`;
 
   const supplierLine = [
     po.supplier?.name ?? "-",
@@ -214,72 +217,76 @@ export default function CompraDetailPage() {
       header: "Material",
       cell: (it) => (
         <div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="font-medium">
-              {it.material?.name ?? it.materialId}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!it.materialId}
-                onClick={async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!it.materialId) return toast.error("Item sem materialId.");
-                  try {
-                    await navigator.clipboard.writeText(String(it.materialId));
-                    toast.success("MaterialId copiado: " + String(it.materialId));
-                  } catch {
-                    toast.error("Não foi possível copiar para a área de transferência.");
-                  }
-                }}
-              >
-                Copiar materialId
-              </Button>
-              <Link
-                href={`/estoque/movimentacoes?materialId=${encodeURIComponent(String(it.materialId ?? ""))}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Button variant="outline" size="sm" disabled={!it.materialId}>
-                  Ledger
-                </Button>
-              </Link>
-            </div>
+          <div className="font-medium">{it.material?.name ?? it.materialId}</div>
+          <div className="flex items-center gap-2 mt-1">
+            {it.material?.code ? (
+              <span className="text-xs text-muted-foreground">Código: {it.material.code}</span>
+            ) : null}
+            <Link
+              href={`/estoque/movimentacoes?materialId=${encodeURIComponent(String(it.materialId ?? ""))}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-primary hover:underline"
+            >
+              Ledger
+            </Link>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:underline"
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!it.materialId) return;
+                try {
+                  await navigator.clipboard.writeText(String(it.materialId));
+                  toast.success("ID copiado.");
+                } catch {
+                  toast.error("Não foi possível copiar.");
+                }
+              }}
+            >
+              Copiar id
+            </button>
           </div>
-          {it.material?.code ? (
-            <div className="text-xs text-muted-foreground">
-              Código: {it.material.code}
-            </div>
-          ) : null}
         </div>
       ),
     },
     {
       key: "qty",
       header: "Qtd",
-      headerClassName: "w-[120px]",
+      headerClassName: "w-[100px]",
       className: "text-right tabular-nums",
       cell: (it) => Number(it.quantity ?? 0).toFixed(4),
     },
     {
+      key: "cfop",
+      header: "CFOP",
+      headerClassName: "w-[80px]",
+      cell: (it) => (it.cfop ? <span className="font-mono text-sm">{it.cfop}</span> : "—"),
+    },
+    {
+      key: "ncm",
+      header: "NCM",
+      headerClassName: "w-[100px]",
+      cell: (it) => (it.ncm ? <span className="font-mono text-sm">{it.ncm}</span> : "—"),
+    },
+    {
       key: "unit",
       header: "Custo unit.",
-      headerClassName: "w-[140px]",
+      headerClassName: "w-[120px]",
       className: "text-right tabular-nums",
       cell: (it) => money(it.unitCost ?? 0),
     },
     {
       key: "total",
       header: "Total",
-      headerClassName: "w-[140px]",
+      headerClassName: "w-[120px]",
       className: "text-right tabular-nums",
       cell: (it) => money(it.total ?? 0),
     },
     {
       key: "actions",
       header: "",
-      headerClassName: "w-[120px]",
+      headerClassName: "w-[100px]",
       className: "text-right",
       cell: (it) => (
         <Button
@@ -309,10 +316,10 @@ export default function CompraDetailPage() {
   return (
     <div className="p-6 space-y-6">
       <PageHeader
-        title={`Pedido de Compra #${po.id}`}
+        title={pageTitle}
         subtitle={supplierLine}
         meta={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <PurchaseOrderStatusBadge status={status as any} />
             <span className="text-sm text-muted-foreground">
               Total: <span className="font-medium text-foreground">{money(total)}</span>
@@ -320,20 +327,19 @@ export default function CompraDetailPage() {
             <span className="text-sm text-muted-foreground">
               Itens: <span className="font-medium text-foreground">{items.length}</span>
             </span>
-
             {nfeKey ? (
               <span className="text-sm text-muted-foreground">
-                NF-e:{" "}
-                <span className="font-mono text-foreground">
-                  {String(nfeKey).slice(0, 10)}…{String(nfeKey).slice(-6)}
-                </span>
-                {nfeIssuedAt ? <span> · {nfeIssuedAt}</span> : null}
+                Origem: NF-e importada · Chave {String(nfeKey).slice(0, 8)}…{String(nfeKey).slice(-4)}
+                {nfeIssuedAt ? ` · ${nfeIssuedAt}` : ""}
               </span>
             ) : null}
           </div>
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link href="/compras/pedidos">
+              <Button variant="ghost" size="sm">← Voltar</Button>
+            </Link>
             <Button
               variant="outline"
               onClick={() => {
@@ -343,131 +349,173 @@ export default function CompraDetailPage() {
             >
               Ledger
             </Button>
-            <Button
-              disabled={!canSend || sendMut.isPending}
-              onClick={() =>
-                setConfirm({
-                  open: true,
-                  title: "Marcar como ENVIADO",
-                  description:
-                    "Após enviar, o pedido não poderá mais ser editado. Deseja continuar?",
-                  confirmText: "Marcar como Enviado",
-                  cancelText: "Voltar",
-                  onConfirm: () => sendMut.mutate(),
-                })
-              }
-            >
-              {sendMut.isPending ? "Enviando..." : "Marcar como Enviado"}
-            </Button>
-
-            <Button
-              variant="destructive"
-              disabled={!canCancel || cancelMut.isPending}
-              onClick={() =>
-                setConfirm({
-                  open: true,
-                  title: "Cancelar pedido de compra",
-                  description:
-                    "Esta ação marca o pedido como CANCELADO. Deseja continuar?",
-                  confirmText: "Cancelar",
-                  cancelText: "Voltar",
-                  destructive: true,
-                  onConfirm: () => cancelMut.mutate(),
-                })
-              }
-            >
-              {cancelMut.isPending ? "Cancelando..." : "Cancelar"}
-            </Button>
-
-            <Button
-              variant="secondary"
-              disabled={!canReceive || recMut.isPending}
-              onClick={() =>
-                setConfirm({
-                  open: true,
-                  title: "Confirmar RECEBIMENTO",
-                  description:
-                    "Isso dará entrada no estoque, criará movimentações no ledger e atualizará custos (currentCost) dos materiais. Deseja continuar?",
-                  confirmText: "Receber",
-                  cancelText: "Voltar",
-                  onConfirm: () => recMut.mutate(),
-                })
-              }
-            >
-              {recMut.isPending ? "Recebendo..." : "Receber (entrada estoque)"}
-            </Button>
+            {status !== "RECEIVED" && status !== "CANCELED" && (
+              <Button
+                disabled={!canSend || sendMut.isPending}
+                onClick={() =>
+                  setConfirm({
+                    open: true,
+                    title: "Marcar como ENVIADO",
+                    description:
+                      "Após enviar, o pedido não poderá mais ser editado. Deseja continuar?",
+                    confirmText: "Marcar como Enviado",
+                    cancelText: "Voltar",
+                    onConfirm: () => sendMut.mutate(),
+                  })
+                }
+              >
+                {sendMut.isPending ? "Enviando..." : "Marcar como Enviado"}
+              </Button>
+            )}
+            {canCancel && (
+              <Button
+                variant="destructive"
+                disabled={cancelMut.isPending}
+                onClick={() =>
+                  setConfirm({
+                    open: true,
+                    title: "Cancelar pedido de compra",
+                    description:
+                      "Esta ação marca o pedido como CANCELADO. Deseja continuar?",
+                    confirmText: "Cancelar",
+                    cancelText: "Voltar",
+                    destructive: true,
+                    onConfirm: () => cancelMut.mutate(),
+                  })
+                }
+              >
+                {cancelMut.isPending ? "Cancelando..." : "Cancelar"}
+              </Button>
+            )}
+            {status === "SENT" && (
+              <Button
+                variant="secondary"
+                disabled={!canReceive || recMut.isPending}
+                onClick={() =>
+                  setConfirm({
+                    open: true,
+                    title: "Confirmar RECEBIMENTO",
+                    description:
+                      "Isso dará entrada no estoque, criará movimentações no ledger e atualizará custos (currentCost) dos materiais. Deseja continuar?",
+                    confirmText: "Receber",
+                    cancelText: "Voltar",
+                    onConfirm: () => recMut.mutate(),
+                  })
+                }
+              >
+                {recMut.isPending ? "Recebendo..." : "Receber (entrada estoque)"}
+              </Button>
+            )}
           </div>
         }
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Adicionar item</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-4">
-            <select
-              className="h-10 rounded-md border bg-background px-3 text-sm"
-              value={materialId}
-              onChange={(e) => setMaterialId(e.target.value)}
-              disabled={!canEdit || matsQ.isLoading}
-            >
-              <option value="">
-                {matsQ.isLoading
-                  ? "Carregando materiais..."
-                  : "Selecione um material…"}
-              </option>
-              {(matsQ.data?.materials ?? []).map((m: any) => (
-                <option key={m.id} value={m.id}>
-                  {m.code ? `${m.code} - ` : ""}
-                  {m.name}
+      <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        {status === "DRAFT" && (
+          <p>
+            <strong className="text-foreground">Rascunho.</strong> Você pode editar itens (adicionar, remover, alterar). Quando terminar, use <strong className="text-foreground">Marcar como Enviado</strong>. Quando a mercadoria chegar, abra o pedido e use <strong className="text-foreground">Receber (entrada estoque)</strong>.
+          </p>
+        )}
+        {status === "SENT" && (
+          <p>
+            <strong className="text-foreground">Enviado ao fornecedor.</strong> O pedido não pode mais ser editado. Quando os produtos chegarem, use <strong className="text-foreground">Receber (entrada estoque)</strong> para dar entrada e atualizar custos.
+          </p>
+        )}
+        {status === "RECEIVED" && (
+          <p>
+            <strong className="text-foreground">Recebido.</strong> A entrada no estoque já foi feita. Os itens abaixo são apenas consulta.
+          </p>
+        )}
+        {status === "CANCELED" && (
+          <p>
+            <strong className="text-foreground">Cancelado.</strong> Este pedido não será processado.
+          </p>
+        )}
+      </div>
+
+      {canEdit ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Adicionar item</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-4">
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                value={materialId}
+                onChange={(e) => setMaterialId(e.target.value)}
+                disabled={matsQ.isLoading}
+              >
+                <option value="">
+                  {matsQ.isLoading
+                    ? "Carregando materiais..."
+                    : "Selecione um material…"}
                 </option>
-              ))}
-            </select>
+                {(matsQ.data?.materials ?? []).map((m: any) => (
+                  <option key={m.id} value={m.id}>
+                    {m.code ? `${m.code} - ` : ""}
+                    {m.name}
+                  </option>
+                ))}
+              </select>
 
-            <Input
-              type="number"
-              step="0.0001"
-              value={quantity}
-              onChange={(e) => setQuantity(Number(e.target.value))}
-              disabled={!canEdit}
-              placeholder="Quantidade"
-            />
+              <Input
+                type="number"
+                step="0.0001"
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+                placeholder="Quantidade"
+              />
 
-            <Input
-              type="number"
-              step="0.0001"
-              value={unitCost}
-              onChange={(e) => setUnitCost(Number(e.target.value))}
-              disabled={!canEdit}
-              placeholder="Custo unit."
-            />
+              <Input
+                type="number"
+                step="0.0001"
+                value={unitCost}
+                onChange={(e) => setUnitCost(Number(e.target.value))}
+                placeholder="Custo unit."
+              />
 
-            <Button
-              disabled={!canEdit || addMut.isPending || !materialId}
-              onClick={() => addMut.mutate({ materialId, quantity, unitCost })}
-            >
-              {addMut.isPending ? "Adicionando..." : "Adicionar"}
-            </Button>
-          </div>
-
-          {!canEdit ? (
-            <div className="text-xs text-muted-foreground">
-              Pedido não está em DRAFT — edição bloqueada.
+              <Button
+                disabled={addMut.isPending || !materialId}
+                onClick={() => addMut.mutate({ materialId, quantity, unitCost })}
+              >
+                {addMut.isPending ? "Adicionando..." : "Adicionar"}
+              </Button>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-muted/30">
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">
+              {status === "RECEIVED"
+                ? "Pedido já recebido. Itens e totais abaixo são apenas consulta."
+                : status === "SENT"
+                  ? "Pedido enviado ao fornecedor. Use \"Receber (entrada estoque)\" quando os produtos chegarem."
+                  : status === "CANCELED"
+                    ? "Pedido cancelado."
+                    : "Edição bloqueada."}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-      <DataTable
-        columns={columns}
-        rows={items}
-        rowKey={(r: any) => r.id}
-        emptyTitle="Sem itens"
-        emptyHint={
-          canEdit ? "Adicione itens acima para enviar o pedido." : "Pedido sem itens."
-        }
-      />
+      <div>
+        {items.length > 0 && items.every((it: any) => !it.cfop && !it.ncm) && (
+          <p className="text-xs text-muted-foreground mb-2">
+            CFOP e NCM aparecem quando o pedido foi criado pela importação de uma NF-e (XML). Pedidos criados manualmente ficam com —.
+          </p>
+        )}
+        <DataTable
+          columns={columns}
+          rows={items}
+          rowKey={(r: any) => r.id}
+          emptyTitle="Sem itens"
+          emptyHint={
+            canEdit ? "Adicione itens acima para enviar o pedido." : "Pedido sem itens."
+          }
+        />
+      </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
